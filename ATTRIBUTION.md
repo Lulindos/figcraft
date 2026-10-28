@@ -40,3 +40,9 @@ egui's default fonts (compiled into the `egui`/`epaint` crates) keep their own l
 | Asset | Author | Source | Licence | Use |
 |---|---|---|---|---|
 | `epaint_default_fonts::EGUI_ICONS`, `epaint_default_fonts::EMOJI_ICON` (dependency font inputs) | John Slegers | [egui 6d518fc7](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts), [emoji-icon-font](https://github.com/jslegers/emoji-icon-font) | MIT (Copyright (c) 2014 John Slegers; full upstream text in `NOTICE`) | egui-icons.ttf is the five-glyph subset, included by default_fonts independently of monochrome_emoji_fonts; emoji-icon-font.ttf is the full monochrome fallback. Dependency assets unmodified here; no font file copied into this repository. |
+
+## LegatIA (fork `legatia`)
+
+| Asset | Author | Source | Licence | Use |
+|---|---|---|---|---|
+| `assets/app-icon/legatia-64.png` | LegatIA | The LegatIA app icon (LegatIAdm `public/favicon.png`, resized to 64 px) | All rights reserved by LegatIA; not covered by this repository's licences | The app icon in the LegatIA Design build (see `LEGATIA.md`) |
