@@ -47,13 +47,13 @@ pub struct Tokens {
     pub focus: Color32,
 }
 
-/// FigCraft's brand green for solid surfaces.
-pub const BRAND: Color32 = Color32::from_rgb(0x02, 0xDA, 0x96);
-/// Contrast-safe green for thin selection outlines and white-on-green labels.
-/// It reaches 4.5:1 on white and 3:1 on the dark canvas.
-pub const ACCENT: Color32 = Color32::from_rgb(0x00, 0x87, 0x5F);
-/// Ink on the bright green brand surface (white would not have enough contrast).
-pub const ACCENT_ON: Color32 = Color32::from_rgb(0x07, 0x35, 0x2A);
+/// LegatIA: the brand blue for solid surfaces (FigCraft's green upstream; see legatia.rs).
+pub const BRAND: Color32 = crate::legatia::BLUE_500;
+/// LegatIA: contrast-safe blue for thin selection outlines and white-on-blue labels.
+/// It reaches 5.9:1 on white and 3:1 on the dark canvas.
+pub const ACCENT: Color32 = crate::legatia::BLUE_600;
+/// LegatIA: ink on the brand blue surface (white: 4.6:1).
+pub const ACCENT_ON: Color32 = Color32::WHITE;
 /// Id of the canvas overlays' green for this frame ([`set_canvas_page`]).
 const CANVAS_ACCENT: &str = "figcraft-canvas-accent";
 
@@ -189,6 +189,7 @@ pub fn apply(ctx: &Context, t: Tokens) {
 /// [`apply`], with egui's own animations (hover fades, openings, smooth scrolling to a target) off
 /// when the system or the preferences ask for reduced motion. Prototype transitions still play.
 pub fn apply_with(ctx: &Context, t: Tokens, reduce_motion: bool) {
+    let t = crate::legatia::tokens(t);
     ctx.data_mut(|d| d.insert_temp(tokens_id(), t));
     ctx.set_visuals(visuals(t));
     ctx.global_style_mut(|s| {
@@ -253,7 +254,7 @@ fn visuals(t: Tokens) -> Visuals {
 pub fn on_dark<R>(ui: &mut egui::Ui, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let ctx = ui.ctx().clone();
     let saved = Tokens::get(&ctx);
-    let dark = Tokens::dark();
+    let dark = crate::legatia::tokens(Tokens::dark());
     ctx.data_mut(|d| d.insert_temp(tokens_id(), dark));
     let r = ui
         .scope(|ui| {
@@ -401,18 +402,14 @@ pub fn brand(size: f32) -> FontId {
 
 /// The two-tone Archivo wordmark used in the home sidebar and About window.
 pub fn paint_wordmark(painter: &egui::Painter, left_center: egui::Pos2, size: f32, t: &Tokens) {
-    let font = brand(size);
-    let fig = painter.layout_no_wrap("Fig".into(), font.clone(), t.text);
-    let fig_width = fig.size().x;
-    painter.galley(egui::pos2(left_center.x, left_center.y - fig.size().y / 2.0), fig, t.text);
-    painter.text(egui::pos2(left_center.x + fig_width, left_center.y), egui::Align2::LEFT_CENTER, "Craft", font, t.accent_text);
+    crate::legatia::paint_wordmark(painter, left_center, brand(size), t);
 }
 
 /// Paint the owner's original chameleon icon from the existing app asset.
 pub fn paint_app_icon(ui: &egui::Ui, rect: egui::Rect) {
     static ICON: OnceLock<Option<egui::ColorImage>> = OnceLock::new();
     let image = ICON.get_or_init(|| {
-        let rgba = image::load_from_memory(include_bytes!("../../../assets/app-icon/figcraft-64.png")).ok()?.to_rgba8();
+        let rgba = image::load_from_memory(include_bytes!("../../../assets/app-icon/legatia-64.png")).ok()?.to_rgba8();
         Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
     });
     let Some(image) = image else {
