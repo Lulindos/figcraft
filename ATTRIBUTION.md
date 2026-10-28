@@ -46,3 +46,9 @@ egui's default fonts (compiled into the `egui`/`epaint` crates) keep their own l
 | Path | Contributor | Source | Licence | Review |
 |---|---|---|---|---|
 | `crates/ui-egui/locales/ar.toml` | @hussain-hz with OpenAI Codex (AI-assisted) | Original Arabic wording from FigCraft's English catalog and engine command labels; no proprietary localisation consulted | MIT OR Apache-2.0 | Draft; native-speaker review and maintainer approval pending |
+
+## LegatIA (fork `legatia`)
+
+| Asset | Author | Source | Licence | Use |
+|---|---|---|---|---|
+| `assets/app-icon/legatia-64.png` | LegatIA | The LegatIA app icon (LegatIAdm `public/favicon.png`, resized to 64 px) | All rights reserved by LegatIA; not covered by this repository's licences | The app icon in the LegatIA Design build (see `LEGATIA.md`) |
