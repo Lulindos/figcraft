@@ -246,7 +246,7 @@ pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
 fn cards(full: Rect, central: Rect) -> Vec<Rect> {
     let gap = f32::from(PANEL_GAP);
     let rail = 56.0 + RAIL_GAP;
-    let (top, bottom) = (full.min.y, full.max.y - gap);
+    let (top, bottom) = (full.min.y + gap, full.max.y - gap);
     let card = |x0: f32, x1: f32| (x1 - x0 > 1.0).then(|| Rect::from_min_max(pos2(x0, top), pos2(x1, bottom)));
     let left = central.min.x - full.min.x;
     let mut out = Vec::new();
