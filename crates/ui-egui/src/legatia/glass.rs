@@ -7,12 +7,12 @@
 //! The blur comes from each finished render: averaged down [`STEP`] times and box-blurred, a small
 //! picture that the GPU stretches back over the glass, where that render's page is now.
 //!
-//! The glass freezes while the canvas moves (a drag on it, the wheel, a pinch): renders cover the canvas
-//! only, as without the glass, and the last blur stays, following the page; [`SETTLE`] after the
-//! motion stops the design under the panels and its blur catch up.
+//! The blur costs a millisecond or two per render (a few pixels of each [`STEP`]-wide block), so it
+//! follows every render, the motion included. The render covers the panels the whole time: a render of
+//! another size can't reuse the last image (a pan renders only the strips it uncovers).
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use egui::epaint::RectShape;
 use egui::layers::ShapeIdx;
@@ -24,8 +24,6 @@ use super::{PANEL_GAP, PANEL_RADIUS, RAIL_GAP};
 const STEP: usize = 16;
 /// Pixels between the samples averaged in a block (the picture is blurred anyway).
 const SAMPLE: usize = 4;
-/// Seconds without motion before the glass catches up.
-const SETTLE: f64 = 0.35;
 /// The box blur's radius (in blurred pixels) and passes: about the LegatIA cards' blur.
 const RADIUS: usize = 5;
 const PASSES: usize = 3;
@@ -69,9 +67,6 @@ impl Frost {
 
 static SLOT: Mutex<Option<Slot>> = Mutex::new(None);
 static FROST: Mutex<Option<Frost>> = Mutex::new(None);
-/// The canvas is moving (see [`page`]); and until when it counts as moving (`f64` bits, in egui time).
-static MOVING: AtomicBool = AtomicBool::new(false);
-static MOVING_UNTIL: AtomicU64 = AtomicU64::new(0);
 /// Whether the last frame painted the glass (the panels' and the tab bar's frames then leave their
 /// fill to it).
 static GLAZED: AtomicBool = AtomicBool::new(false);
@@ -110,7 +105,7 @@ pub fn bar(fill: Color32) -> Color32 {
 pub fn widen(central: Rect, narrow: bool, origin: (f64, f64), visible: (u32, u32), scale: f64, zoom: f64, max_side: u32) -> ((f64, f64), (u32, u32)) {
     let guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let Some(slot) = guard.as_ref() else { return (origin, visible) };
-    if narrow || zoom <= 0.0 || !glazed() || MOVING.load(Ordering::Relaxed) {
+    if narrow || zoom <= 0.0 || !glazed() {
         return (origin, visible);
     }
     let per_point = scale / zoom;
@@ -127,21 +122,8 @@ pub fn widen(central: Rect, narrow: bool, origin: (f64, f64), visible: (u32, u32
     ((x, y), (w, h))
 }
 
-/// The page colour, under the panels too (the canvas paints it at `central`). Also notes whether the
-/// canvas is moving: a drag that started on it, the wheel or a pinch over it, now or less than
-/// [`SETTLE`] ago.
+/// The page colour, under the panels too (the canvas paints it at `central`).
 pub fn page(ctx: &Context, central: Rect, narrow: bool, bg: Color32) {
-    let (now, moving) = ctx.input(|i| {
-        let over = |p: Option<Pos2>| p.is_some_and(|p| central.contains(p));
-        let dragging = i.pointer.is_decidedly_dragging() && over(i.pointer.press_origin());
-        let wheel = (i.smooth_scroll_delta != egui::Vec2::ZERO || (i.zoom_delta() - 1.0).abs() > 1e-4) && over(i.pointer.hover_pos());
-        (i.time, dragging || wheel)
-    });
-    if moving {
-        MOVING_UNTIL.store((now + SETTLE).to_bits(), Ordering::Relaxed);
-        ctx.request_repaint_after(std::time::Duration::from_secs_f64(SETTLE + 0.05));
-    }
-    MOVING.store(now < f64::from_bits(MOVING_UNTIL.load(Ordering::Relaxed)), Ordering::Relaxed);
     update(ctx, |slot| {
         slot.central = central;
         slot.narrow = narrow;
@@ -164,11 +146,11 @@ pub fn frost_view() -> Option<figcraft_render::View> {
     FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|f| f.view.clone())
 }
 
-/// Blurs a finished render for the glass: not a coarse preview, nor while the canvas moves (the last
-/// blur stays).
+/// Blurs a finished render for the glass (not a coarse preview: the last blur stays until the refined
+/// image).
 pub fn frost(ctx: &Context, image: &ColorImage, view: &figcraft_render::View, coarse: bool) {
     let [w, h] = image.size;
-    if w == 0 || h == 0 || coarse || MOVING.load(Ordering::Relaxed) || !crate::theme::Tokens::get(ctx).dark {
+    if w == 0 || h == 0 || coarse || !crate::theme::Tokens::get(ctx).dark {
         return;
     }
     let (fw, fh) = (w.div_ceil(STEP), h.div_ceil(STEP));
