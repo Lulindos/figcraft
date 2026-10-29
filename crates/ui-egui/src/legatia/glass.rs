@@ -1,9 +1,8 @@
 //! LegatIA: the side panels, the tab bar and the tools' dock as frosted glass over the design (dark
 //! theme). The canvas is rendered under the panels and the tab bar too ([`widen`]) and painted behind
 //! them, in a slot [`reserve`] keeps before the tab bar ([`page`], [`canvas`]). Under the cards, the
-//! bar and the dock it is painted blurred ([`frost`]), with a translucent fill over it: lighter at the
-//! top and darker below on the cards, like the LegatIA glass cards. Between the cards the design
-//! shows as is.
+//! bar and the dock it is painted blurred ([`frost`]), with a plain translucent fill ([`GLASS`]) over
+//! it. Between the cards the design shows as is.
 //!
 //! The blur comes from each finished render: averaged down [`STEP`] times and box-blurred, a small
 //! picture that the GPU stretches back over the glass.
@@ -11,7 +10,7 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use egui::epaint::{Mesh, RectShape};
+use egui::epaint::RectShape;
 use egui::layers::ShapeIdx;
 use egui::{Color32, ColorImage, Context, CornerRadius, LayerId, Painter, Pos2, Rect, Shape, TextureHandle, TextureId, TextureOptions, Ui, pos2};
 
@@ -22,6 +21,9 @@ const STEP: usize = 12;
 /// The box blur's radius (in blurred pixels) and passes: about the LegatIA cards' blur.
 const RADIUS: usize = 5;
 const PASSES: usize = 3;
+/// The glass over the blurred design: dark and translucent, dark enough for white text over a white
+/// design.
+const GLASS: Color32 = Color32::from_rgba_unmultiplied_const(18, 18, 20, 0xCC);
 
 /// This frame's slot behind the tab bar and the panels, and what goes in it.
 struct Slot {
@@ -217,15 +219,15 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
         }
     }
     if t.dark {
-        shapes.extend(cards.iter().map(|c| Shape::mesh(glass_fill(*c, f32::from(PANEL_RADIUS)))));
-        shapes.push(Shape::rect_filled(header, CornerRadius::ZERO, Color32::from_rgba_unmultiplied(8, 8, 9, 0xC0)));
+        shapes.extend(cards.iter().map(|c| Shape::rect_filled(*c, CornerRadius::same(PANEL_RADIUS), GLASS)));
+        shapes.push(Shape::rect_filled(header, CornerRadius::ZERO, GLASS));
     }
     GLAZED.store(t.dark && !cards.is_empty(), Ordering::Relaxed);
     Painter::new(ctx.clone(), slot.layer, slot.window).set(slot.idx, Shape::Vec(shapes));
 }
 
 /// The tools' dock at `rect` (rounded by `radius`) as a small glass card over the design: the blurred
-/// design under it and the glass fill. False in the light theme or before a render (the toolbar then
+/// design under it and the glass. False in the light theme or before a render (the toolbar then
 /// paints its own panel).
 pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
     let slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
@@ -235,7 +237,7 @@ pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
         return false;
     }
     painter.add(RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(image, rect)));
-    painter.add(Shape::mesh(glass_fill(rect, radius)));
+    painter.rect_filled(rect, CornerRadius::same(radius as u8), GLASS);
     true
 }
 
@@ -254,41 +256,4 @@ fn cards(full: Rect, central: Rect) -> Vec<Rect> {
     }
     out.extend(card(central.max.x + gap, full.max.x - gap));
     out
-}
-
-/// The glass over the blurred design: lighter at the top (white at 8% in the LegatIA cards), darker
-/// from three quarters down; dark enough for white text over a white design.
-fn glass_fill(rect: Rect, radius: f32) -> Mesh {
-    let top = [40.0, 40.0, 44.0, 0.76];
-    let bottom = [16.0, 16.0, 18.0, 0.88];
-    let colour = |y: f32| {
-        let k = ((y - rect.min.y) / (rect.height() * 0.76)).clamp(0.0, 1.0);
-        let c: [f32; 4] = std::array::from_fn(|i| top[i] + (bottom[i] - top[i]) * k);
-        Color32::from_rgba_unmultiplied(c[0] as u8, c[1] as u8, c[2] as u8, (c[3] * 255.0) as u8)
-    };
-    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
-    // Rows: close together along the corners, every 8 points down the sides.
-    let mut ys: Vec<f32> = (0..=12).map(|i| rect.min.y + r * i as f32 / 12.0).collect();
-    let mut y = rect.min.y + r + 8.0;
-    while y < rect.max.y - r {
-        ys.push(y);
-        y += 8.0;
-    }
-    ys.extend((0..=12).map(|i| rect.max.y - r + r * i as f32 / 12.0));
-    let inset = |y: f32| {
-        let d = if y < rect.min.y + r { rect.min.y + r - y } else if y > rect.max.y - r { y - (rect.max.y - r) } else { 0.0 };
-        r - (r * r - d.min(r) * d.min(r)).sqrt()
-    };
-    let mut mesh = Mesh::default();
-    for (i, y) in ys.iter().enumerate() {
-        let c = colour(*y);
-        mesh.colored_vertex(pos2(rect.min.x + inset(*y), *y), c);
-        mesh.colored_vertex(pos2(rect.max.x - inset(*y), *y), c);
-        if i > 0 {
-            let k = (2 * i) as u32;
-            mesh.add_triangle(k - 2, k - 1, k);
-            mesh.add_triangle(k - 1, k + 1, k);
-        }
-    }
-    mesh
 }
