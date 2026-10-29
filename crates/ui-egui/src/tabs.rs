@@ -247,6 +247,9 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
         let theme_r = theme_toggle(app, ui, &t, rect, buttons_w);
         // LegatIA: the host page's buttons (Sair da tela cheia) left of the toggle.
         let theme_r = crate::legatia::host::tab_bar_buttons(ui, &t, theme_r);
+        if crate::legatia::host::take_show_editor() {
+            app.ui.home = false;
+        }
         if app.ui.title_bar != TitleBar::Native {
             drag_free_space(ui, rect, x + 34.0, theme_r.min.x);
         }

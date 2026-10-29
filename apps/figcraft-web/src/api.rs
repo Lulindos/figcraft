@@ -181,6 +181,7 @@ pub fn install() -> Result<(), JsValue> {
 /// figcraft.onhost = (event) => { /* {type: "button", id} | {type: "open", id} | {type: "new"} */ }
 /// figcraft.thumbnail(bytes)        // the picture inside a .figcraft (PNG bytes), or null
 /// figcraft.uiFonts(regular, bold)  // the interface's typeface (font files)
+/// figcraft.showEditor()            // leave the home screen for the file the page just opened
 /// ```
 fn install_legatia(obj: &js_sys::Object) -> Result<(), JsValue> {
     use figcraft_ui_egui::legatia;
@@ -212,6 +213,15 @@ fn install_legatia(obj: &js_sys::Object) -> Result<(), JsValue> {
                     legatia::fonts::set(ctx, regular.to_vec(), bold.to_vec());
                 }
             });
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        obj,
+        "showEditor",
+        Closure::<dyn Fn()>::new(|| {
+            legatia::host::show_editor();
+            repaint();
         })
         .into_js_value(),
     )
