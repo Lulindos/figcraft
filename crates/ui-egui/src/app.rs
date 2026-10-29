@@ -272,7 +272,7 @@ impl FigApp {
             egui::Panel::left("left_rail")
                 .exact_size(56.0 + crate::legatia::RAIL_GAP)
                 .resizable(false)
-                .frame(crate::legatia::panel_frame(&t, true, false))
+                .frame(crate::legatia::panel_frame(&t, true, false)).show_separator_line(false)
                 .show(ui, |ui| {
                     a11y::region(&mut self.ui.nav, ui, a11y::Region::Layers, egui::accesskit::Role::Navigation, i18n::tr("Sidebar"));
                     layers::rail(self, ui)
@@ -295,7 +295,7 @@ impl FigApp {
             egui::Panel::left("left_panel")
                 .resizable(false)
                 .exact_size(left_w)
-                .frame(crate::legatia::panel_frame(&t, true, true))
+                .frame(crate::legatia::panel_frame(&t, true, true)).show_separator_line(false)
                 .show(ui, |ui| {
                     let label = match self.ui.left_tab {
                         _ if self.ui.versions.open => i18n::tr("Version history"),
@@ -313,7 +313,7 @@ impl FigApp {
             egui::Panel::right("right_panel")
                 .resizable(false)
                 .exact_size(right_w)
-                .frame(crate::legatia::panel_frame(&t, true, true))
+                .frame(crate::legatia::panel_frame(&t, true, true)).show_separator_line(false)
                 .show(ui, |ui| {
                     let label = match self.ui.right_tab {
                         RightTab::Design => i18n::tr("Design"),

@@ -3,8 +3,8 @@
 //! [`tokens`] when it installs a theme and [`paint_wordmark`] when it draws the name. See LEGATIA.md.
 //!
 //! The page around the web editor (LegatIAdm) also puts its own buttons and files in it ([`host`])
-//! and the LegatIA typeface in the interface ([`fonts`]); the panels float as glass cards
-//! ([`panel_frame`], [`backdrop`]).
+//! and the LegatIA typeface in the interface ([`fonts`]); the panels float as frosted glass cards over
+//! the design ([`panel_frame`], [`backdrop`], [`glass`]), with no lines between their sections ([`divider`]).
 //!
 //! Tokens are rewritten with struct update syntax (`..t`): a token upstream adds later keeps
 //! FigCraft's value until it is mapped here, instead of breaking the build.
@@ -14,6 +14,7 @@ use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Stroke, 
 use crate::theme::Tokens;
 
 pub mod fonts;
+pub mod glass;
 pub mod host;
 
 /// The LegatIA blue (#006FFE) and the steps of its scale used by the UI (LegatIA design system).
@@ -95,21 +96,36 @@ pub fn paint_wordmark(painter: &Painter, left_center: Pos2, font: FontId, t: &To
 
 /// Between the panels, and around them.
 const PANEL_GAP: i8 = 6;
+/// The cards' corners.
+const PANEL_RADIUS: u8 = 14;
 
-/// The side panels' frame: a card floating on the black window, rounded, with the hairline of the
-/// LegatIA glass cards (white at 8%) and their lighter fill. `left`, `right`: the gap on that side.
+/// The side panels' frame: a glass card floating over the design, rounded, with the hairline of the
+/// LegatIA glass cards (white at 8%) and a translucent fill over the blurred design behind it
+/// ([`glass`]). `left`, `right`: the gap on that side.
 pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
-    let (fill, line) = if t.dark { (rgb(0x11, 0x11, 0x13), Color32::from_white_alpha(20)) } else { (t.panel, t.border) };
+    let (fill, line) = if t.dark {
+        (Color32::from_rgba_unmultiplied(0x11, 0x11, 0x13, 0xC8), Color32::from_white_alpha(20))
+    } else {
+        (Color32::from_rgba_unmultiplied(t.panel.r(), t.panel.g(), t.panel.b(), 0xD0), t.border)
+    };
     Frame::NONE
         .fill(fill)
         .stroke(Stroke::new(1.0, line))
-        .corner_radius(CornerRadius::same(14))
+        .corner_radius(CornerRadius::same(PANEL_RADIUS))
         .outer_margin(Margin { left: if left { PANEL_GAP } else { 0 }, right: if right { PANEL_GAP } else { 0 }, top: 0, bottom: PANEL_GAP })
 }
 
-/// The window behind the floating panels: the canvas colour (black), painted before them.
+/// The window behind the floating panels: the canvas colour (black), painted before them, and the
+/// place the design goes under them ([`glass`]).
 pub fn backdrop(ui: &Ui, t: &Tokens) {
-    ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.canvas);
+    let full = ui.available_rect_before_wrap();
+    ui.painter().rect_filled(full, 0.0, t.canvas);
+    glass::reserve(ui, full);
+}
+
+/// The lines between a panel's sections and rows: none, the cards' spacing separates them.
+pub fn divider(_t: &Tokens) -> Color32 {
+    Color32::TRANSPARENT
 }
 
 /// What the left rail grows by: its gap from the window edge ([`panel_frame`]), so its labels keep their room.

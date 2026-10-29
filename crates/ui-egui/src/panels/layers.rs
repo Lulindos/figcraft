@@ -93,7 +93,7 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
         a11y::popup(&mut app.ui.nav, lresp.id, crate::menus::main_menu_id());
     }
     y += 44.0;
-    ui.painter().line_segment([pos2(r.min.x + 18.0, y), pos2(r.max.x - 18.0, y)], Stroke::new(1.0, t.border));
+    ui.painter().line_segment([pos2(r.min.x + 18.0, y), pos2(r.max.x - 18.0, y)], Stroke::new(1.0, crate::legatia::divider(&t)));
     y += 12.0;
     let items =
         [(Icon::Page, tr("File"), Some(LeftTab::File)), (Icon::Assets, tr("Assets"), Some(LeftTab::Assets)), (Icon::Styles, tr("Variables"), None)];
@@ -165,7 +165,7 @@ pub fn left_panel(app: &mut FigApp, ui: &mut Ui) {
     if hresp.clicked() {
         app.ui.close_left_panel();
     }
-    ui.painter().line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, t.border));
+    ui.painter().line_segment([head.left_bottom(), head.right_bottom()], Stroke::new(1.0, crate::legatia::divider(&t)));
     match app.ui.left_tab {
         LeftTab::File => {
             pages(app, ui);

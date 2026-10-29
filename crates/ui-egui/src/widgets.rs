@@ -976,7 +976,7 @@ pub fn separator(ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(w, 1.0), Sense::hover());
-    ui.painter().line_segment([rect.left_center(), rect.right_center()], Stroke::new(1.0, t.border));
+    ui.painter().line_segment([rect.left_center(), rect.right_center()], Stroke::new(1.0, crate::legatia::divider(&t)));
 }
 
 /// Paint a checkerboard (transparency) in `rect`.
