@@ -74,6 +74,17 @@ pub struct File {
 
 static HOST: Mutex<Option<Arc<Host>>> = Mutex::new(None);
 static EVENTS: Mutex<Vec<Value>> = Mutex::new(Vec::new());
+static SHOW_EDITOR: Mutex<bool> = Mutex::new(false);
+
+/// The page opened or made a file (`figcraft.showEditor()`): the home screen gives way to it.
+pub fn show_editor() {
+    *SHOW_EDITOR.lock().unwrap_or_else(|e| e.into_inner()) = true;
+}
+
+/// Whether the page asked for the editor since the last call (the home screen asks every frame).
+pub fn take_show_editor() -> bool {
+    std::mem::take(&mut *SHOW_EDITOR.lock().unwrap_or_else(|e| e.into_inner()))
+}
 
 /// The page's description (`null`: no host).
 pub fn set(host: Value) -> Result<(), String> {
