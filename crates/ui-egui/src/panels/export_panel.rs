@@ -361,7 +361,7 @@ pub(crate) fn wide_button(ui: &mut Ui, label: &str) -> bool {
         if resp.hovered() {
             ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
         }
-        ui.painter().rect_stroke(r, CornerRadius::same(5), Stroke::new(1.0, t.border_strong), StrokeKind::Inside);
+        crate::legatia::button_edge(ui.painter(), r, &t);
         // One line inside the button: a long layer name ends with an ellipsis and shows in full on
         // hover (#1650).
         let shown = widgets::elide(ui, &label.replace(['\r', '\n'], " "), w - 16.0);
