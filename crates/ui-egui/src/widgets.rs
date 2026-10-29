@@ -914,13 +914,7 @@ pub fn section_header_resp(ui: &mut Ui, title: &str, buttons: &[(Icon, &str)], d
     if resp.hovered() && !dim {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
     }
-    ui.painter().text(
-        pos2(rect.min.x + PAD, rect.center().y),
-        Align2::LEFT_CENTER,
-        title,
-        semibold(11.0),
-        if dim { t.text_secondary } else { t.text },
-    );
+    crate::legatia::section_title(ui.painter(), pos2(rect.min.x + PAD, rect.center().y), title, dim, &t);
     let mut out = None;
     let mut x = rect.max.x - PAD_RIGHT;
     for (i, (icon, tip)) in buttons.iter().enumerate().rev() {
