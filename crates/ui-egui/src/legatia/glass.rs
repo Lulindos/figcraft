@@ -1,14 +1,13 @@
-//! LegatIA: the side panels as frosted glass over the design, like the LegatIA glass cards. The
-//! canvas is rendered under the panels too ([`widen`]) and painted behind them, in a slot [`reserve`]
-//! keeps before they are laid out ([`page`], [`canvas`]). Where the cards are it is painted blurred
-//! ([`frost`]), under the cards' glass: a fill lighter at the top and darker below, and the LegatIA
-//! glass ring (a hairline lit at the top and the bottom, [`ring`]). Between the cards the design
+//! LegatIA: the side panels, the tab bar and the tools' dock as frosted glass over the design (dark
+//! theme). The canvas is rendered under the panels and the tab bar too ([`widen`]) and painted behind
+//! them, in a slot [`reserve`] keeps before the tab bar ([`page`], [`canvas`]). Under the cards, the
+//! bar and the dock it is painted blurred ([`frost`]), with a translucent fill over it: lighter at the
+//! top and darker below on the cards, like the LegatIA glass cards. Between the cards the design
 //! shows as is.
 //!
 //! The blur comes from each finished render: averaged down [`STEP`] times and box-blurred, a small
-//! picture that the GPU stretches back over the cards.
+//! picture that the GPU stretches back over the glass.
 
-use std::f32::consts::{FRAC_PI_2, PI};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -23,14 +22,14 @@ const STEP: usize = 12;
 /// The box blur's radius (in blurred pixels) and passes: about the LegatIA cards' blur.
 const RADIUS: usize = 5;
 const PASSES: usize = 3;
-/// The glass ring's width (the LegatIA `--glass-ring-width`).
-const RING: f32 = 1.4;
 
-/// This frame's slot behind the panels and what goes in it.
+/// This frame's slot behind the tab bar and the panels, and what goes in it.
 struct Slot {
     layer: LayerId,
     idx: ShapeIdx,
-    /// The window under the tab bar: panels and canvas.
+    /// The whole window, the tab bar included.
+    window: Rect,
+    /// The window under the tab bar: panels and canvas ([`area`]).
     full: Rect,
     /// The canvas between the panels ([`crate::canvas::CanvasState::rect`]), as last painted.
     central: Rect,
@@ -46,41 +45,69 @@ struct Frost {
     covered: [f32; 2],
 }
 
-static SLOT: Mutex<Option<Slot>> = Mutex::new(None);
-static FROST: Mutex<Option<Frost>> = Mutex::new(None);
-/// Whether the last frame painted the cards' glass (the panels' frames then leave their fill to it).
-static GLAZED: AtomicBool = AtomicBool::new(false);
-
-/// Keeps the place behind the panels (called before they are laid out, see [`super::backdrop`]).
-pub(super) fn reserve(ui: &Ui, full: Rect) {
-    let idx = ui.painter().add(Shape::Noop);
-    let mut guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
-    let (central, narrow) = guard.as_ref().map_or((full, false), |s| (s.central, s.narrow));
-    *guard = Some(Slot { layer: ui.layer_id(), idx, full, central, narrow, bg: None, image: None });
+impl Frost {
+    /// Where `part` of a render shown at `image` lies in the blurred picture.
+    fn uv(&self, image: Rect, part: Rect) -> Rect {
+        let at = |p: Pos2| pos2((p.x - image.min.x) / image.width() * self.covered[0], (p.y - image.min.y) / image.height() * self.covered[1]);
+        Rect::from_min_max(at(part.min), at(part.max))
+    }
 }
 
-/// Whether the panels sit on the glass painted behind them (see [`super::panel_frame`]).
+static SLOT: Mutex<Option<Slot>> = Mutex::new(None);
+static FROST: Mutex<Option<Frost>> = Mutex::new(None);
+/// Whether the last frame painted the glass (the panels' and the tab bar's frames then leave their
+/// fill to it).
+static GLAZED: AtomicBool = AtomicBool::new(false);
+
+/// Keeps the place behind the tab bar and the panels, the canvas colour until the canvas fills it
+/// (called before the tab bar is laid out, see `tabs::tab_bar`).
+pub fn reserve(ui: &Ui) {
+    let window = ui.max_rect();
+    let idx = ui.painter().add(Shape::rect_filled(window, CornerRadius::ZERO, crate::theme::Tokens::get(ui.ctx()).canvas));
+    let mut guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
+    let (full, central, narrow) = guard.as_ref().map_or((window, window, false), |s| (s.full, s.central, s.narrow));
+    *guard = Some(Slot { layer: ui.layer_id(), idx, window, full, central, narrow, bg: None, image: None });
+}
+
+/// Where the panels and the canvas go: the window under the tab bar (see [`super::backdrop`]).
+pub(super) fn area(full: Rect) {
+    if let Some(slot) = SLOT.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        slot.full = full;
+    }
+}
+
+/// Whether the panels and the tab bar sit on the glass painted behind them (see [`super::panel_frame`]).
 pub(super) fn glazed() -> bool {
     GLAZED.load(Ordering::Relaxed)
 }
 
-/// The render's origin and width in pixels (`visible_w`) grown to cover the panels on either side of
-/// `central`, at `scale` pixels per page unit and `zoom` points per page unit, within `max_side`
-/// pixels (the panels' far edges stay uncovered when the window is too wide for it). A narrow
-/// window keeps its own layout (no glass).
-pub fn widen(central: Rect, narrow: bool, ox: f64, visible_w: u32, scale: f64, zoom: f64, max_side: u32) -> (f64, u32) {
+/// The tab bar's fill: clear over the glass, `fill` otherwise.
+pub fn bar(fill: Color32) -> Color32 {
+    if glazed() { Color32::TRANSPARENT } else { fill }
+}
+
+/// The render's origin and size in pixels (`visible`) grown to cover the panels on either side of
+/// `central` and the tab bar above it, at `scale` pixels per page unit and `zoom` points per page
+/// unit, within `max_side` pixels (the far edges stay uncovered when the window is too big for it).
+/// Only under the glass; a narrow window keeps its own layout.
+pub fn widen(central: Rect, narrow: bool, origin: (f64, f64), visible: (u32, u32), scale: f64, zoom: f64, max_side: u32) -> ((f64, f64), (u32, u32)) {
     let guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(slot) = guard.as_ref() else { return (ox, visible_w) };
-    let left = f64::from((central.min.x - slot.full.min.x).max(0.0));
-    let right = f64::from((slot.full.max.x - central.max.x).max(0.0));
-    if narrow || left + right < 1.0 || zoom <= 0.0 {
-        return (ox, visible_w);
+    let Some(slot) = guard.as_ref() else { return (origin, visible) };
+    if narrow || zoom <= 0.0 || !glazed() {
+        return (origin, visible);
     }
     let per_point = scale / zoom;
-    let room = f64::from(max_side.saturating_sub(visible_w));
-    let fit = (room / ((left + right) * per_point)).min(1.0);
-    let (left, right) = (left * fit, right * fit);
-    (ox - left / zoom, visible_w + ((left + right) * per_point).floor() as u32)
+    let grow = |before: f32, after: f32, at: f64, size: u32| {
+        let (before, after) = (f64::from(before.max(0.0)), f64::from(after.max(0.0)));
+        if before + after < 1.0 {
+            return (at, size);
+        }
+        let fit = (f64::from(max_side.saturating_sub(size)) / ((before + after) * per_point)).min(1.0);
+        (at - before * fit / zoom, size + ((before + after) * fit * per_point).floor() as u32)
+    };
+    let (x, w) = grow(central.min.x - slot.full.min.x, slot.full.max.x - central.max.x, origin.0, visible.0);
+    let (y, h) = grow(central.min.y - slot.window.min.y, 0.0, origin.1, visible.1);
+    ((x, y), (w, h))
 }
 
 /// The page colour, under the panels too (the canvas paints it at `central`).
@@ -98,7 +125,7 @@ pub fn canvas(ctx: &Context, texture: TextureId, rect: Rect) {
     update(ctx, |slot| slot.image = Some((texture, rect)));
 }
 
-/// Blurs a finished render for the cards and the dock.
+/// Blurs a finished render for the glass.
 pub fn frost(ctx: &Context, image: &ColorImage) {
     let [w, h] = image.size;
     if w == 0 || h == 0 || !crate::theme::Tokens::get(ctx).dark {
@@ -172,37 +199,34 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
     let mut guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let Some(slot) = guard.as_mut() else { return };
     f(slot);
-    let dark = crate::theme::Tokens::get(ctx).dark;
+    let t = crate::theme::Tokens::get(ctx);
     let cards = if slot.narrow { Vec::new() } else { cards(slot.full, slot.central) };
-    let mut shapes = Vec::new();
+    let header = Rect::from_min_max(slot.window.min, pos2(slot.window.max.x, slot.full.min.y));
+    let mut shapes = vec![Shape::rect_filled(slot.window, CornerRadius::ZERO, t.canvas)];
     if let Some(bg) = slot.bg {
-        shapes.push(Shape::rect_filled(slot.full, CornerRadius::ZERO, bg));
+        shapes.push(Shape::rect_filled(slot.window, CornerRadius::ZERO, bg));
     }
-    if let Some((texture, rect)) = slot.image {
+    if let Some((texture, rect)) = slot.image.filter(|_| t.dark) {
         shapes.push(Shape::image(texture, rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE));
-        let frost = FROST.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(frost) = frost.as_ref() {
-            let uv = |p: Pos2| pos2((p.x - rect.min.x) / rect.width() * frost.covered[0], (p.y - rect.min.y) / rect.height() * frost.covered[1]);
-            for card in &cards {
-                let shape = RectShape::filled(*card, CornerRadius::same(PANEL_RADIUS), Color32::WHITE)
-                    .with_texture(frost.texture.id(), Rect::from_min_max(uv(card.min), uv(card.max)));
-                shapes.push(shape.into());
-            }
+        if let Some(frost) = FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            let blurred = |part: Rect, radius: u8| -> Shape {
+                RectShape::filled(part, CornerRadius::same(radius), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(rect, part)).into()
+            };
+            shapes.extend(cards.iter().map(|c| blurred(*c, PANEL_RADIUS)));
+            shapes.push(blurred(header, 0));
         }
     }
-    if dark {
-        for card in &cards {
-            shapes.push(Shape::mesh(glass_fill(*card, f32::from(PANEL_RADIUS))));
-            shapes.push(Shape::mesh(ring(*card, f32::from(PANEL_RADIUS))));
-        }
+    if t.dark {
+        shapes.extend(cards.iter().map(|c| Shape::mesh(glass_fill(*c, f32::from(PANEL_RADIUS)))));
+        shapes.push(Shape::rect_filled(header, CornerRadius::ZERO, Color32::from_rgba_unmultiplied(8, 8, 9, 0xC0)));
     }
-    GLAZED.store(dark && !cards.is_empty(), Ordering::Relaxed);
-    Painter::new(ctx.clone(), slot.layer, slot.full).set(slot.idx, Shape::Vec(shapes));
+    GLAZED.store(t.dark && !cards.is_empty(), Ordering::Relaxed);
+    Painter::new(ctx.clone(), slot.layer, slot.window).set(slot.idx, Shape::Vec(shapes));
 }
 
 /// The tools' dock at `rect` (rounded by `radius`) as a small glass card over the design: the blurred
-/// design under it, the glass fill and the ring. False in the light theme or before a render (the
-/// toolbar then paints its own panel).
+/// design under it and the glass fill. False in the light theme or before a render (the toolbar then
+/// paints its own panel).
 pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
     let slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let frost = FROST.lock().unwrap_or_else(|e| e.into_inner());
@@ -210,12 +234,8 @@ pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
     if !crate::theme::Tokens::get(painter.ctx()).dark {
         return false;
     }
-    let uv = |p: Pos2| pos2((p.x - image.min.x) / image.width() * frost.covered[0], (p.y - image.min.y) / image.height() * frost.covered[1]);
-    let blurred = RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE)
-        .with_texture(frost.texture.id(), Rect::from_min_max(uv(rect.min), uv(rect.max)));
-    painter.add(blurred);
+    painter.add(RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(image, rect)));
     painter.add(Shape::mesh(glass_fill(rect, radius)));
-    painter.add(Shape::mesh(ring(rect, radius)));
     true
 }
 
@@ -236,8 +256,8 @@ fn cards(full: Rect, central: Rect) -> Vec<Rect> {
     out
 }
 
-/// The card's glass over the blurred design: lighter at the top (white at 8% in the LegatIA cards),
-/// darker from three quarters down; dark enough for white text over a white design.
+/// The glass over the blurred design: lighter at the top (white at 8% in the LegatIA cards), darker
+/// from three quarters down; dark enough for white text over a white design.
 fn glass_fill(rect: Rect, radius: f32) -> Mesh {
     let top = [40.0, 40.0, 44.0, 0.76];
     let bottom = [16.0, 16.0, 18.0, 0.88];
@@ -271,52 +291,4 @@ fn glass_fill(rect: Rect, radius: f32) -> Mesh {
         }
     }
     mesh
-}
-
-/// The LegatIA glass ring around `rect` (rounded by `radius`): a [`RING`]-wide hairline, white at
-/// 45% at the top and the bottom, fading out in the middle (`--glass-ring-gradient`).
-pub(super) fn ring(rect: Rect, radius: f32) -> Mesh {
-    const STOPS: [(f32, f32); 6] = [(0.0, 0.45), (0.2, 0.15), (0.4, 0.0), (0.6, 0.0), (0.8, 0.15), (1.0, 0.45)];
-    let alpha = |y: f32| {
-        let k = ((y - rect.min.y) / rect.height()).clamp(0.0, 1.0);
-        let i = STOPS.iter().position(|s| s.0 >= k).unwrap_or(STOPS.len() - 1).max(1);
-        let ((k0, a0), (k1, a1)) = (STOPS[i - 1], STOPS[i]);
-        a0 + (a1 - a0) * ((k - k0) / (k1 - k0)).clamp(0.0, 1.0)
-    };
-    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
-    let outer = outline(rect, r);
-    let inner = outline(rect.shrink(RING), (r - RING).max(0.0));
-    let mut mesh = Mesh::default();
-    for (o, i) in outer.iter().zip(&inner) {
-        let c = Color32::from_white_alpha((alpha(o.y) * 255.0) as u8);
-        mesh.colored_vertex(*o, c);
-        mesh.colored_vertex(*i, c);
-    }
-    let n = outer.len() as u32;
-    for i in 0..n {
-        let j = (i + 1) % n;
-        mesh.add_triangle(2 * i, 2 * i + 1, 2 * j);
-        mesh.add_triangle(2 * i + 1, 2 * j + 1, 2 * j);
-    }
-    mesh
-}
-
-/// Points around `rect` rounded by `r`, clockwise from the top-left corner, with the straight sides
-/// cut every 8% of the height so a vertical gradient along them keeps its stops.
-fn outline(rect: Rect, r: f32) -> Vec<Pos2> {
-    const ARC: usize = 8;
-    const SIDE: usize = 12;
-    let arc = |cx: f32, cy: f32, from: f32| (0..=ARC).map(move |i| {
-        let a = from + FRAC_PI_2 * i as f32 / ARC as f32;
-        pos2(cx + r * a.cos(), cy + r * a.sin())
-    });
-    let side = |x: f32, y0: f32, y1: f32| (1..SIDE).map(move |i| pos2(x, y0 + (y1 - y0) * i as f32 / SIDE as f32));
-    let (l, t, rr, b) = (rect.min.x + r, rect.min.y + r, rect.max.x - r, rect.max.y - r);
-    let mut out: Vec<Pos2> = arc(l, t, PI).collect();
-    out.extend(arc(rr, t, 1.5 * PI));
-    out.extend(side(rect.max.x, t, b));
-    out.extend(arc(rr, b, 0.0));
-    out.extend(arc(l, b, FRAC_PI_2));
-    out.extend(side(rect.min.x, b, t));
-    out
 }

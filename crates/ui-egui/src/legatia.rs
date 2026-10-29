@@ -9,8 +9,7 @@
 //! Tokens are rewritten with struct update syntax (`..t`): a token upstream adds later keeps
 //! FigCraft's value until it is mapped here, instead of breaking the build.
 
-use egui::text::{LayoutJob, TextFormat};
-use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Rect, Shape, Stroke, Ui, vec2};
+use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Rect, Stroke, Ui};
 
 use crate::theme::Tokens;
 
@@ -64,7 +63,7 @@ fn dark(t: Tokens) -> Tokens {
         danger: rgb(0xF8, 0x71, 0x71),
         warning: rgb(0xFB, 0x92, 0x3C),
         tab_bar: rgb(0x00, 0x00, 0x00),
-        tab_active: rgb(0x0A, 0x0A, 0x0B),
+        tab_active: Color32::from_white_alpha(14),
         shadow: Color32::from_black_alpha(160),
         menu: rgb(0x0E, 0x0E, 0x10),
         menu_hover: BLUE_600,
@@ -121,12 +120,10 @@ pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
         .outer_margin(Margin { left: if left { PANEL_GAP } else { 0 }, right: if right { PANEL_GAP } else { 0 }, top: 0, bottom: PANEL_GAP })
 }
 
-/// The window behind the floating panels: the canvas colour (black), painted before them, and the
-/// place the design goes under them ([`glass`]).
-pub fn backdrop(ui: &Ui, t: &Tokens) {
-    let full = ui.available_rect_before_wrap();
-    ui.painter().rect_filled(full, 0.0, t.canvas);
-    glass::reserve(ui, full);
+/// Where the floating panels go (the window under the tab bar): the design and its glass go behind
+/// them ([`glass`]), in the place kept before the tab bar.
+pub fn backdrop(ui: &Ui, _t: &Tokens) {
+    glass::area(ui.available_rect_before_wrap());
 }
 
 /// The lines between a panel's sections and rows: none, the cards' spacing separates them.
@@ -134,34 +131,19 @@ pub fn divider(_t: &Tokens) -> Color32 {
     Color32::TRANSPARENT
 }
 
-/// The active item of the left rail, as the LegatIA menu's: a glass pill with the glass ring (dark
-/// theme); the selected-row fill in the light one.
+/// The active item of the left rail, as the LegatIA menu's: a pill of light glass (dark theme); the
+/// selected-row fill in the light one.
 pub fn active_item(painter: &Painter, rect: Rect, t: &Tokens) {
     if !t.dark {
         painter.rect_filled(rect, CornerRadius::same(6), t.selected_row);
         return;
     }
-    let r = rect.height() / 2.0;
-    painter.rect_filled(rect, CornerRadius::same(r as u8), Color32::from_white_alpha(10));
-    painter.add(Shape::mesh(glass::ring(rect, r)));
+    painter.rect_filled(rect, CornerRadius::same((rect.height() / 2.0) as u8), Color32::from_white_alpha(16));
 }
 
 /// The active rail item's icon: white on the dark glass, the accent in the light theme.
 pub fn active_icon(t: &Tokens) -> Color32 {
     if t.dark { t.icon } else { t.accent_text }
-}
-
-/// A panel section's title as the LegatIA section headings: a small square, then the title in capitals,
-/// monospaced, spaced out (`tracking-[0.18em]`), softer than the text. `left_center`: where it starts.
-pub fn section_title(painter: &Painter, left_center: Pos2, title: &str, dim: bool, t: &Tokens) {
-    const SIZE: f32 = 10.0;
-    painter.rect_filled(Rect::from_center_size(Pos2::new(left_center.x + 2.5, left_center.y), vec2(5.0, 5.0)), 0.0, t.text_tertiary);
-    let color = if dim { t.text_tertiary } else { t.text_secondary };
-    let mut job = LayoutJob::default();
-    let format = TextFormat { font_id: FontId::monospace(SIZE), color, extra_letter_spacing: SIZE * 0.18, ..Default::default() };
-    job.append(&title.to_uppercase(), 0.0, format);
-    let galley = painter.layout_job(job);
-    painter.galley(Pos2::new(left_center.x + 13.0, left_center.y - galley.size().y / 2.0), galley, color);
 }
 
 /// What the left rail grows by: its gap from the window edge ([`panel_frame`]), so its labels keep their room.
