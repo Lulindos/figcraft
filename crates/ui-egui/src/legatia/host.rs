@@ -7,7 +7,9 @@
 //! - `primary`: the button in Share's place (Salvar na LegatIA);
 //! - `buttons`: buttons left of the theme toggle (Sair da tela cheia);
 //! - `files`: the page's files on the home screen, instead of the recent files;
-//! - `newFile`: new files are the page's (the tab bar's + asks it).
+//! - `newFile`: new files are the page's (the tab bar's + asks it);
+//! - `dockSlot`: points kept empty at the end of the tools' dock, where the page draws its own
+//!   button over the editor (the agent orb); `figcraft.dockSlot()` says where ([`dock_slot_rect`]).
 //!
 //! Events: `{type: "button", id}`, `{type: "open", id}` (a file on the home screen) and
 //! `{type: "new"}`. Without a host (the desktop app, the plain web build) nothing changes.
@@ -31,6 +33,7 @@ pub struct Host {
     pub buttons: Vec<Button>,
     pub files: Option<Files>,
     pub new_file: bool,
+    pub dock_slot: f32,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -75,6 +78,8 @@ pub struct File {
 static HOST: Mutex<Option<Arc<Host>>> = Mutex::new(None);
 static EVENTS: Mutex<Vec<Value>> = Mutex::new(Vec::new());
 static SHOW_EDITOR: Mutex<bool> = Mutex::new(false);
+/// Where the dock's slot was drawn, and in which pass.
+static DOCK_SLOT: Mutex<Option<(Rect, u64)>> = Mutex::new(None);
 
 /// The page opened or made a file (`figcraft.showEditor()`): the home screen gives way to it.
 pub fn show_editor() {
@@ -109,6 +114,31 @@ fn emit(event: Value) {
 /// The `thumbnail.png` inside a `.figcraft` file, for the page to keep beside it.
 pub fn thumbnail_png(file: &[u8]) -> Option<Vec<u8>> {
     figcraft_format::thumbnail::thumbnail_png(std::io::Cursor::new(file))
+}
+
+/// The width the page keeps at the end of the tools' dock (0: none), with the gap before it.
+pub fn dock_slot_width() -> f32 {
+    get().map_or(0.0, |h| if h.dock_slot > 0.0 { h.dock_slot + 8.0 } else { 0.0 })
+}
+
+/// Keeps the page's slot at the end of the dock `pill` (called while the dock is drawn): a divider
+/// and an empty square the page draws over.
+pub fn dock_slot(ui: &Ui, t: &Tokens, pill: Rect) {
+    let w = get().map_or(0.0, |h| h.dock_slot);
+    if w <= 0.0 {
+        return;
+    }
+    let r = Rect::from_center_size(pos2(pill.max.x - 8.0 - w / 2.0, pill.center().y), vec2(w, w));
+    let x = r.min.x - 6.0;
+    ui.painter().line_segment([pos2(x, pill.center().y - 14.0), pos2(x, pill.center().y + 14.0)], Stroke::new(1.0, t.border));
+    *DOCK_SLOT.lock().unwrap_or_else(|e| e.into_inner()) = Some((r, ui.ctx().cumulative_pass_nr()));
+}
+
+/// Where the page's slot is now, in points (null when the dock wasn't drawn in the last passes:
+/// another toolbar, the home screen, the UI hidden).
+pub fn dock_slot_rect(ctx: &egui::Context) -> Option<Rect> {
+    let (r, pass) = (*DOCK_SLOT.lock().unwrap_or_else(|e| e.into_inner()))?;
+    (pass + 2 >= ctx.cumulative_pass_nr()).then_some(r)
 }
 
 /// The tab bar's +: true when the page makes new files (it was told), so the editor opens none.
