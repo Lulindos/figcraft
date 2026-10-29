@@ -82,7 +82,13 @@ impl eframe::App for WebShell {
     /// still advance autosave, live and control deadlines without painting. `FigApp::ui` does
     /// not repeat it.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // LegatIA: `window.figcraft` requests are taken and answered here too, so a hidden tab (the
+        // page driven by Claude from another window) still runs them: the background tick answers
+        // state-only requests for a hidden window.
+        self.fig.control_queue.extend(crate::api::take_requests());
         figcraft_ui_egui::windows::guard(&mut self.fig, ctx, |fig| fig.background_tick(ctx));
+        crate::api::poll_replies();
+        crate::api::deliver_host_events();
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
