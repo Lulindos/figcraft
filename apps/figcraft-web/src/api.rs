@@ -218,6 +218,21 @@ fn install_legatia(obj: &js_sys::Object) -> Result<(), JsValue> {
     )?;
     set_fn(
         obj,
+        "dockSlot",
+        // [x, y, width, height] in CSS pixels of the editor's page, or null
+        Closure::<dyn Fn() -> JsValue>::new(|| {
+            CTX.with(|c| {
+                let ctx = c.borrow().clone()?;
+                let r = legatia::host::dock_slot_rect(&ctx)?;
+                let z = ctx.zoom_factor();
+                Some(to_js(&json!([r.min.x * z, r.min.y * z, r.width() * z, r.height() * z])))
+            })
+            .unwrap_or(JsValue::NULL)
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        obj,
         "showEditor",
         Closure::<dyn Fn()>::new(|| {
             legatia::host::show_editor();

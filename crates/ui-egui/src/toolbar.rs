@@ -142,7 +142,7 @@ fn main_width(groups: &[Group], board: bool) -> f32 {
 /// Draw · Design · Prototype · Inspect mode switcher (on a board, the Design panel's button).
 fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: bool) {
     let groups = if board { BOARD_GROUPS } else { GROUPS };
-    let width = main_width(groups, board);
+    let width = main_width(groups, board) + crate::legatia::host::dock_slot_width();
     let rect = pill(ui, &mut app.ui.nav, canvas, width, t);
     let cy = rect.center().y;
     let scroll = pill_scroll(ui, rect, width);
@@ -166,6 +166,7 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
     } else {
         mode_switcher(app, ui, x, cy, t);
     }
+    crate::legatia::host::dock_slot(ui, t, rect);
     ui.set_clip_rect(outer_clip);
     help_button(app, ui, canvas, rect, t);
 }
