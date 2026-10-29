@@ -329,6 +329,15 @@ fn action_card(ui: &mut Ui, t: &Tokens, icon: Icon, title: &str, sub: &str) -> b
 }
 
 fn recents(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
+    // LegatIA: the host page's files instead of the recent files.
+    if let Some(files) = crate::legatia::host::files() {
+        heading(ui, t, tr("Recents"));
+        if !files.new_label.is_empty() && action_card(ui, t, Icon::PenNib, &files.new_label, &files.new_detail) {
+            crate::legatia::host::new_file_chosen();
+        }
+        crate::legatia::host::file_grid(ui, t, &files);
+        return;
+    }
     heading(ui, t, tr("Recents"));
     let (mut new_file, mut new_board, mut open) = (false, false, false);
     ui.horizontal_wrapped(|ui| {

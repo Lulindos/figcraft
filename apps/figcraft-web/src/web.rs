@@ -177,6 +177,7 @@ impl eframe::App for WebShell {
         if crate::local_fonts::take_loaded() {
             self.fig.run("text.refit", serde_json::json!({}));
         }
+        crate::api::deliver_host_events();
     }
 }
 

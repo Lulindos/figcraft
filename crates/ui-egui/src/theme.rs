@@ -348,6 +348,7 @@ pub fn install_fonts(ctx: &Context, system: bool, cjk: u8) {
             }
         }
     }
+    crate::legatia::fonts::install(&mut fonts, system, cjk);
     ctx.set_fonts(fonts);
 }
 

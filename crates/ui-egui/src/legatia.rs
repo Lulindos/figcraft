@@ -2,12 +2,19 @@
 //! `legatia`). Kept in a file of its own so upstream updates don't touch it: `theme.rs` only calls
 //! [`tokens`] when it installs a theme and [`paint_wordmark`] when it draws the name. See LEGATIA.md.
 //!
+//! The page around the web editor (LegatIAdm) also puts its own buttons and files in it ([`host`])
+//! and the LegatIA typeface in the interface ([`fonts`]); the panels float as glass cards
+//! ([`panel_frame`], [`backdrop`]).
+//!
 //! Tokens are rewritten with struct update syntax (`..t`): a token upstream adds later keeps
 //! FigCraft's value until it is mapped here, instead of breaking the build.
 
-use egui::{Color32, FontId, Painter, Pos2};
+use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Stroke, Ui};
 
 use crate::theme::Tokens;
+
+pub mod fonts;
+pub mod host;
 
 /// The LegatIA blue (#006FFE) and the steps of its scale used by the UI (LegatIA design system).
 pub const BLUE_300: Color32 = Color32::from_rgb(0x75, 0xB1, 0xFF);
@@ -84,4 +91,23 @@ pub fn paint_wordmark(painter: &Painter, left_center: Pos2, font: FontId, t: &To
     let width = legat.size().x;
     painter.galley(Pos2::new(left_center.x, left_center.y - legat.size().y / 2.0), legat, t.text);
     painter.text(Pos2::new(left_center.x + width, left_center.y), egui::Align2::LEFT_CENTER, "IA", font, t.accent_text);
+}
+
+/// Between the panels, and around them.
+const PANEL_GAP: i8 = 6;
+
+/// The side panels' frame: a card floating on the black window, rounded, with the hairline of the
+/// LegatIA glass cards (white at 8%) and their lighter fill. `left`, `right`: the gap on that side.
+pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
+    let (fill, line) = if t.dark { (rgb(0x11, 0x11, 0x13), Color32::from_white_alpha(20)) } else { (t.panel, t.border) };
+    Frame::NONE
+        .fill(fill)
+        .stroke(Stroke::new(1.0, line))
+        .corner_radius(CornerRadius::same(14))
+        .outer_margin(Margin { left: if left { PANEL_GAP } else { 0 }, right: if right { PANEL_GAP } else { 0 }, top: 0, bottom: PANEL_GAP })
+}
+
+/// The window behind the floating panels: the canvas colour (black), painted before them.
+pub fn backdrop(ui: &Ui, t: &Tokens) {
+    ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.canvas);
 }
