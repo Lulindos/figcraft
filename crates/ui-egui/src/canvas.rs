@@ -249,7 +249,7 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
         } else {
             egui::TextureOptions::LINEAR
         };
-        crate::legatia::glass::frost(&ctx, &done.image);
+        crate::legatia::glass::frost(&ctx, &done.image, &done.view, done.coarse);
         match &mut app.canvas.texture {
             Some(t) => t.set(done.image, filter),
             None => app.canvas.texture = Some(ctx.load_texture("figcraft-canvas", done.image, filter)),
@@ -276,7 +276,8 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
         let pixel_preview = app.session.ds().ok().and_then(|ds| ds.view.pixel_preview_scale()) == Some(v.scale);
         let image_rect = presented_image_rect(tl, v, zoom, ppp, pixel_preview);
         painter.image(tex.id(), image_rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-        crate::legatia::glass::canvas(&ctx, tex.id(), image_rect);
+        let frost_at = crate::legatia::glass::frost_view().map(|f| presented_image_rect(app.to_screen(f.origin.0, f.origin.1), &f, zoom, ppp, false));
+        crate::legatia::glass::canvas(&ctx, tex.id(), image_rect, frost_at);
     }
     crate::dev_mode::refresh_measurements(app);
     app.session.tool.labels = overlays(app, &painter, &t);

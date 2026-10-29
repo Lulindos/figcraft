@@ -5,10 +5,14 @@
 //! it. Between the cards the design shows as is.
 //!
 //! The blur comes from each finished render: averaged down [`STEP`] times and box-blurred, a small
-//! picture that the GPU stretches back over the glass.
+//! picture that the GPU stretches back over the glass, where that render's page is now.
+//!
+//! The glass freezes while the canvas moves (a drag on it, the wheel, a pinch): renders cover the canvas
+//! only, as without the glass, and the last blur stays, following the page; [`SETTLE`] after the
+//! motion stops the design under the panels and its blur catch up.
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use egui::epaint::RectShape;
 use egui::layers::ShapeIdx;
@@ -17,7 +21,11 @@ use egui::{Color32, ColorImage, Context, CornerRadius, LayerId, Painter, Pos2, R
 use super::{PANEL_GAP, PANEL_RADIUS, RAIL_GAP};
 
 /// Device pixels per pixel of the blurred picture.
-const STEP: usize = 12;
+const STEP: usize = 16;
+/// Pixels between the samples averaged in a block (the picture is blurred anyway).
+const SAMPLE: usize = 4;
+/// Seconds without motion before the glass catches up.
+const SETTLE: f64 = 0.35;
 /// The box blur's radius (in blurred pixels) and passes: about the LegatIA cards' blur.
 const RADIUS: usize = 5;
 const PASSES: usize = 3;
@@ -38,6 +46,8 @@ struct Slot {
     narrow: bool,
     bg: Option<Color32>,
     image: Option<(TextureId, Rect)>,
+    /// Where the render the blur comes from is shown now.
+    frost_at: Option<Rect>,
 }
 
 /// The blurred picture of the last render, and how much of it the render covers (it is padded to
@@ -45,6 +55,8 @@ struct Slot {
 struct Frost {
     texture: TextureHandle,
     covered: [f32; 2],
+    /// The render it comes from (to place it where that render's page is now).
+    view: figcraft_render::View,
 }
 
 impl Frost {
@@ -57,6 +69,9 @@ impl Frost {
 
 static SLOT: Mutex<Option<Slot>> = Mutex::new(None);
 static FROST: Mutex<Option<Frost>> = Mutex::new(None);
+/// The canvas is moving (see [`page`]); and until when it counts as moving (`f64` bits, in egui time).
+static MOVING: AtomicBool = AtomicBool::new(false);
+static MOVING_UNTIL: AtomicU64 = AtomicU64::new(0);
 /// Whether the last frame painted the glass (the panels' and the tab bar's frames then leave their
 /// fill to it).
 static GLAZED: AtomicBool = AtomicBool::new(false);
@@ -68,7 +83,7 @@ pub fn reserve(ui: &Ui) {
     let idx = ui.painter().add(Shape::rect_filled(window, CornerRadius::ZERO, crate::theme::Tokens::get(ui.ctx()).canvas));
     let mut guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let (full, central, narrow) = guard.as_ref().map_or((window, window, false), |s| (s.full, s.central, s.narrow));
-    *guard = Some(Slot { layer: ui.layer_id(), idx, window, full, central, narrow, bg: None, image: None });
+    *guard = Some(Slot { layer: ui.layer_id(), idx, window, full, central, narrow, bg: None, image: None, frost_at: None });
 }
 
 /// Where the panels and the canvas go: the window under the tab bar (see [`super::backdrop`]).
@@ -95,7 +110,7 @@ pub fn bar(fill: Color32) -> Color32 {
 pub fn widen(central: Rect, narrow: bool, origin: (f64, f64), visible: (u32, u32), scale: f64, zoom: f64, max_side: u32) -> ((f64, f64), (u32, u32)) {
     let guard = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let Some(slot) = guard.as_ref() else { return (origin, visible) };
-    if narrow || zoom <= 0.0 || !glazed() {
+    if narrow || zoom <= 0.0 || !glazed() || MOVING.load(Ordering::Relaxed) {
         return (origin, visible);
     }
     let per_point = scale / zoom;
@@ -112,8 +127,21 @@ pub fn widen(central: Rect, narrow: bool, origin: (f64, f64), visible: (u32, u32
     ((x, y), (w, h))
 }
 
-/// The page colour, under the panels too (the canvas paints it at `central`).
+/// The page colour, under the panels too (the canvas paints it at `central`). Also notes whether the
+/// canvas is moving: a drag that started on it, the wheel or a pinch over it, now or less than
+/// [`SETTLE`] ago.
 pub fn page(ctx: &Context, central: Rect, narrow: bool, bg: Color32) {
+    let (now, moving) = ctx.input(|i| {
+        let over = |p: Option<Pos2>| p.is_some_and(|p| central.contains(p));
+        let dragging = i.pointer.is_decidedly_dragging() && over(i.pointer.press_origin());
+        let wheel = (i.smooth_scroll_delta != egui::Vec2::ZERO || (i.zoom_delta() - 1.0).abs() > 1e-4) && over(i.pointer.hover_pos());
+        (i.time, dragging || wheel)
+    });
+    if moving {
+        MOVING_UNTIL.store((now + SETTLE).to_bits(), Ordering::Relaxed);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(SETTLE + 0.05));
+    }
+    MOVING.store(now < f64::from_bits(MOVING_UNTIL.load(Ordering::Relaxed)), Ordering::Relaxed);
     update(ctx, |slot| {
         slot.central = central;
         slot.narrow = narrow;
@@ -122,25 +150,35 @@ pub fn page(ctx: &Context, central: Rect, narrow: bool, bg: Color32) {
     });
 }
 
-/// The canvas picture (`texture` at `rect`), under the panels too.
-pub fn canvas(ctx: &Context, texture: TextureId, rect: Rect) {
-    update(ctx, |slot| slot.image = Some((texture, rect)));
+/// The canvas picture (`texture` at `rect`), under the panels too; `frost_at`: where the render the
+/// blur comes from ([`frost_view`]) is shown now.
+pub fn canvas(ctx: &Context, texture: TextureId, rect: Rect, frost_at: Option<Rect>) {
+    update(ctx, |slot| {
+        slot.image = Some((texture, rect));
+        slot.frost_at = frost_at;
+    });
 }
 
-/// Blurs a finished render for the glass.
-pub fn frost(ctx: &Context, image: &ColorImage) {
+/// The view of the render the blur comes from, for the canvas to place it.
+pub fn frost_view() -> Option<figcraft_render::View> {
+    FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|f| f.view.clone())
+}
+
+/// Blurs a finished render for the glass: not a coarse preview, nor while the canvas moves (the last
+/// blur stays).
+pub fn frost(ctx: &Context, image: &ColorImage, view: &figcraft_render::View, coarse: bool) {
     let [w, h] = image.size;
-    if w == 0 || h == 0 || !crate::theme::Tokens::get(ctx).dark {
+    if w == 0 || h == 0 || coarse || MOVING.load(Ordering::Relaxed) || !crate::theme::Tokens::get(ctx).dark {
         return;
     }
     let (fw, fh) = (w.div_ceil(STEP), h.div_ceil(STEP));
     let mut px = vec![[0.0f32; 4]; fw * fh];
     for by in 0..fh {
         for bx in 0..fw {
-            // Every other pixel of the block: enough for a picture that is blurred anyway.
+            // A few pixels of the block: enough for a picture that is blurred anyway.
             let (mut sum, mut n) = ([0u32; 4], 0u32);
-            for y in (by * STEP..((by + 1) * STEP).min(h)).step_by(2) {
-                for x in (bx * STEP..((bx + 1) * STEP).min(w)).step_by(2) {
+            for y in (by * STEP + SAMPLE / 2..((by + 1) * STEP).min(h)).step_by(SAMPLE) {
+                for x in (bx * STEP + SAMPLE / 2..((bx + 1) * STEP).min(w)).step_by(SAMPLE) {
                     let p = image.pixels[y * w + x];
                     sum[0] += u32::from(p.r());
                     sum[1] += u32::from(p.g());
@@ -165,8 +203,9 @@ pub fn frost(ctx: &Context, image: &ColorImage) {
         Some(f) => {
             f.texture.set(picture, TextureOptions::LINEAR);
             f.covered = covered;
+            f.view = view.clone();
         }
-        None => *guard = Some(Frost { texture: ctx.load_texture("legatia-frost", picture, TextureOptions::LINEAR), covered }),
+        None => *guard = Some(Frost { texture: ctx.load_texture("legatia-frost", picture, TextureOptions::LINEAR), covered, view: view.clone() }),
     }
 }
 
@@ -210,9 +249,9 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
     }
     if let Some((texture, rect)) = slot.image.filter(|_| t.dark) {
         shapes.push(Shape::image(texture, rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE));
-        if let Some(frost) = FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let (Some(frost), Some(at)) = (FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref(), slot.frost_at) {
             let blurred = |part: Rect, radius: u8| -> Shape {
-                RectShape::filled(part, CornerRadius::same(radius), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(rect, part)).into()
+                RectShape::filled(part, CornerRadius::same(radius), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(at, part)).into()
             };
             shapes.extend(cards.iter().map(|c| blurred(*c, PANEL_RADIUS)));
             shapes.push(blurred(header, 0));
@@ -232,11 +271,11 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
 pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
     let slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let frost = FROST.lock().unwrap_or_else(|e| e.into_inner());
-    let (Some((_, image)), Some(frost)) = (slot.as_ref().and_then(|s| s.image), frost.as_ref()) else { return false };
+    let (Some(at), Some(frost)) = (slot.as_ref().and_then(|s| s.frost_at), frost.as_ref()) else { return false };
     if !crate::theme::Tokens::get(painter.ctx()).dark {
         return false;
     }
-    painter.add(RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(image, rect)));
+    painter.add(RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(at, rect)));
     painter.rect_filled(rect, CornerRadius::same(radius as u8), GLASS);
     true
 }
