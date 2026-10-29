@@ -13,7 +13,7 @@ commits nossos. O `main` deste fork fica igual ao original.
 | `crates/ui-egui/src/lib.rs` | `pub mod legatia;` |
 | `crates/ui-egui/src/legatia/host.rs` | A ponte com a página em volta do editor (o LegatIAdm): o botão no lugar de "Compartilhar" (Salvar na LegatIA), botões à esquerda do tema (Sair da tela cheia), os arquivos da LegatIA na tela inicial e o "+" de arquivo novo. Arquivo só nosso. |
 | `crates/ui-egui/src/legatia/fonts.rs` | A fonte da interface que a página entrega em tempo de execução (a Satoshi). Arquivo só nosso. |
-| `crates/ui-egui/src/legatia/glass.rs` | Os painéis, a barra de abas e a dock como vidro fosco sobre o design: o canvas é desenhado também embaixo deles e desfocado ali, com o degradê translúcido dos cartões da LegatIA por cima. Arquivo só nosso. |
+| `crates/ui-egui/src/legatia/glass.rs` | Os painéis, a barra de abas e a dock como vidro fosco sobre o design: o canvas é desenhado também embaixo deles e desfocado ali, com um vidro translúcido por cima. Arquivo só nosso. |
 | `crates/ui-egui/src/app.rs` | Só ganchos: os painéis usam `legatia::panel_frame` (cartões translúcidos, sem a linha do egui ao lado) e `legatia::backdrop` guarda o lugar do design atrás deles. |
 | `crates/ui-egui/src/toolbar.rs` | Só gancho: a dock de ferramentas é um cartão de vidro (`legatia::glass::dock`); no tema claro, a de sempre. |
 | `crates/ui-egui/src/canvas.rs`, `canvas/render.rs` | Só ganchos para `legatia::glass`: o render cobre também a área dos painéis (`widen`), e cada render vai desfocado para trás deles (`frost`, `page`, `canvas`). |
