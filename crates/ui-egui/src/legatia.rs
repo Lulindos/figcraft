@@ -104,9 +104,9 @@ const PANEL_GAP: i8 = 6;
 const PANEL_RADIUS: u8 = 18;
 
 /// The side panels' frame: a card floating over the design, rounded like the LegatIA cards (18).
-/// In the dark theme its glass (blurred design, fill and ring) is painted behind it ([`glass`]), so
+/// In the dark theme its glass (the blurred design and a translucent fill) is painted behind it ([`glass`]), so
 /// the frame itself is clear; until then, and in the light theme, it has a fill and a hairline.
-/// `left`, `right`: the gap on that side.
+/// `left`, `right`: the gap on that side (always one above and below).
 pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
     let (fill, line) = if t.dark && glass::glazed() {
         (Color32::TRANSPARENT, Color32::TRANSPARENT)
@@ -119,7 +119,7 @@ pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
         .fill(fill)
         .stroke(Stroke::new(1.0, line))
         .corner_radius(CornerRadius::same(PANEL_RADIUS))
-        .outer_margin(Margin { left: if left { PANEL_GAP } else { 0 }, right: if right { PANEL_GAP } else { 0 }, top: 0, bottom: PANEL_GAP })
+        .outer_margin(Margin { left: if left { PANEL_GAP } else { 0 }, right: if right { PANEL_GAP } else { 0 }, top: PANEL_GAP, bottom: PANEL_GAP })
 }
 
 /// Where the floating panels go (the window under the tab bar): the design and its glass go behind
