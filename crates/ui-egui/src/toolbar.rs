@@ -492,8 +492,10 @@ fn pill(ui: &Ui, nav: &mut Nav, canvas: Rect, width: f32, t: &Tokens) -> Rect {
     for (i, a) in [(6.0, 10u8), (3.0, 16), (1.0, 24)] {
         painter.rect_filled(rect.expand(i).translate(vec2(0.0, i * 0.5)), CornerRadius::same((13.0 + i) as u8), Color32::from_black_alpha(a));
     }
-    painter.rect_filled(rect, CornerRadius::same(13), t.panel);
-    painter.rect_stroke(rect, CornerRadius::same(13), Stroke::new(1.0, t.border), StrokeKind::Inside);
+    if !crate::legatia::glass::dock(painter, rect, 13.0) {
+        painter.rect_filled(rect, CornerRadius::same(13), t.panel);
+        painter.rect_stroke(rect, CornerRadius::same(13), Stroke::new(1.0, t.border), StrokeKind::Inside);
+    }
     rect
 }
 
