@@ -111,3 +111,6 @@ pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
 pub fn backdrop(ui: &Ui, t: &Tokens) {
     ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.canvas);
 }
+
+/// What the left rail grows by: its gap from the window edge ([`panel_frame`]), so its labels keep their room.
+pub const RAIL_GAP: f32 = PANEL_GAP as f32;
