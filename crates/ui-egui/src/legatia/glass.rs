@@ -67,6 +67,23 @@ impl Frost {
 
 static SLOT: Mutex<Option<Slot>> = Mutex::new(None);
 static FROST: Mutex<Option<Frost>> = Mutex::new(None);
+/// How much glass the page asked for (`host.glass`): none, the design through translucent panels, or
+/// the frosted glass.
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Off,
+    Clear,
+    Frosted,
+}
+
+fn mode() -> Mode {
+    match super::host::get().as_deref().map(|h| h.glass.as_str()) {
+        Some("off") => Mode::Off,
+        Some("clear") => Mode::Clear,
+        _ => Mode::Frosted,
+    }
+}
+
 /// Whether the last frame painted the glass (the panels' and the tab bar's frames then leave their
 /// fill to it).
 static GLAZED: AtomicBool = AtomicBool::new(false);
@@ -150,7 +167,7 @@ pub fn frost_view() -> Option<figcraft_render::View> {
 /// image).
 pub fn frost(ctx: &Context, image: &ColorImage, view: &figcraft_render::View, coarse: bool) {
     let [w, h] = image.size;
-    if w == 0 || h == 0 || coarse || !crate::theme::Tokens::get(ctx).dark {
+    if w == 0 || h == 0 || coarse || mode() != Mode::Frosted || !crate::theme::Tokens::get(ctx).dark {
         return;
     }
     let (fw, fh) = (w.div_ceil(STEP), h.div_ceil(STEP));
@@ -223,15 +240,17 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
     let Some(slot) = guard.as_mut() else { return };
     f(slot);
     let t = crate::theme::Tokens::get(ctx);
+    let mode = mode();
+    let on = t.dark && mode != Mode::Off;
     let cards = if slot.narrow { Vec::new() } else { cards(slot.full, slot.central) };
     let header = Rect::from_min_max(slot.window.min, pos2(slot.window.max.x, slot.full.min.y));
     let mut shapes = vec![Shape::rect_filled(slot.window, CornerRadius::ZERO, t.canvas)];
     if let Some(bg) = slot.bg {
         shapes.push(Shape::rect_filled(slot.window, CornerRadius::ZERO, bg));
     }
-    if let Some((texture, rect)) = slot.image.filter(|_| t.dark) {
+    if let Some((texture, rect)) = slot.image.filter(|_| on) {
         shapes.push(Shape::image(texture, rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE));
-        if let (Some(frost), Some(at)) = (FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref(), slot.frost_at) {
+        if let (Some(frost), Some(at), true) = (FROST.lock().unwrap_or_else(|e| e.into_inner()).as_ref(), slot.frost_at, mode == Mode::Frosted) {
             let blurred = |part: Rect, radius: u8| -> Shape {
                 RectShape::filled(part, CornerRadius::same(radius), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(at, part)).into()
             };
@@ -239,11 +258,11 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
             shapes.push(blurred(header, 0));
         }
     }
-    if t.dark {
+    if on {
         shapes.extend(cards.iter().map(|c| Shape::rect_filled(*c, CornerRadius::same(PANEL_RADIUS), GLASS)));
         shapes.push(Shape::rect_filled(header, CornerRadius::ZERO, GLASS));
     }
-    GLAZED.store(t.dark && !cards.is_empty(), Ordering::Relaxed);
+    GLAZED.store(on && !cards.is_empty(), Ordering::Relaxed);
     Painter::new(ctx.clone(), slot.layer, slot.window).set(slot.idx, Shape::Vec(shapes));
 }
 
@@ -254,7 +273,7 @@ pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
     let slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
     let frost = FROST.lock().unwrap_or_else(|e| e.into_inner());
     let (Some(at), Some(frost)) = (slot.as_ref().and_then(|s| s.frost_at), frost.as_ref()) else { return false };
-    if !crate::theme::Tokens::get(painter.ctx()).dark {
+    if mode() != Mode::Frosted || !crate::theme::Tokens::get(painter.ctx()).dark {
         return false;
     }
     painter.add(RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE).with_texture(frost.texture.id(), frost.uv(at, rect)));
