@@ -106,14 +106,18 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     let w = ui.available_width();
     // Top bar: people (you and the others in a live session), present, share.
     let (top, _) = ui.allocate_exact_size(vec2(w, 48.0), Sense::hover());
-    // As wide as its label needs (longer in some languages).
-    let label = ui.painter().layout_no_wrap(tr("Share").to_string(), semibold(11.5), t.accent_on);
-    let sw = (label.size().x + 24.0).max(56.0);
-    let share = Rect::from_min_size(pos2(top.max.x - 14.0 - sw, top.center().y - 16.0), vec2(sw, 32.0));
-    let sresp = ui.interact(share, ui.scope_id().with("share"), Sense::click()).tip(tr("Share: live session, export"));
-    ui.painter().rect_filled(share, CornerRadius::same(6), if sresp.hovered() { t.accent_hover } else { t.accent });
-    ui.painter().galley(share.center() - label.size() / 2.0, label, t.accent_on);
-    crate::live::share_popover(app, &sresp);
+    // LegatIA: the host page's button (Salvar na LegatIA) takes Share's place.
+    let share = crate::legatia::host::primary_button(ui, &t, top).unwrap_or_else(|| {
+        // As wide as its label needs (longer in some languages).
+        let label = ui.painter().layout_no_wrap(tr("Share").to_string(), semibold(11.5), t.accent_on);
+        let sw = (label.size().x + 24.0).max(56.0);
+        let share = Rect::from_min_size(pos2(top.max.x - 14.0 - sw, top.center().y - 16.0), vec2(sw, 32.0));
+        let sresp = ui.interact(share, ui.scope_id().with("share"), Sense::click()).tip(tr("Share: live session, export"));
+        ui.painter().rect_filled(share, CornerRadius::same(6), if sresp.hovered() { t.accent_hover } else { t.accent });
+        ui.painter().galley(share.center() - label.size() / 2.0, label, t.accent_on);
+        crate::live::share_popover(app, &sresp);
+        share
+    });
     // Play presents; its chevron opens the play menu (present, or preview in a pane).
     let play = Rect::from_min_size(pos2(share.min.x - 50.0, top.center().y - 14.0), vec2(42.0, 28.0));
     let (tri_r, chev_r) =

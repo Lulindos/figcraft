@@ -9,16 +9,21 @@ commits nossos. O `main` deste fork fica igual ao original.
 | Onde | O quê |
 |---|---|
 | `crates/ui-egui/src/legatia.rs` | As cores da LegatIA (preto, bordas finas, azul #006FFE) sobre os tokens do FigCraft, e o nome "LegatIA" no lugar do logotipo. Arquivo só nosso. |
-| `crates/ui-egui/src/theme.rs` | Só ganchos: `apply_with` e `on_dark` passam os tokens por `legatia::tokens`; `BRAND`, `ACCENT` e `ACCENT_ON` são o azul; `paint_wordmark` chama `legatia::paint_wordmark`; o ícone é `legatia-64.png`. |
+| `crates/ui-egui/src/theme.rs` | Só ganchos: `apply_with` e `on_dark` passam os tokens por `legatia::tokens`; `BRAND`, `ACCENT` e `ACCENT_ON` são o azul; `paint_wordmark` chama `legatia::paint_wordmark`; `install_fonts` chama `legatia::fonts::install`; o ícone é `legatia-64.png`. |
 | `crates/ui-egui/src/lib.rs` | `pub mod legatia;` |
+| `crates/ui-egui/src/legatia/host.rs` | A ponte com a página em volta do editor (o LegatIAdm): o botão no lugar de "Compartilhar" (Salvar na LegatIA), botões à esquerda do tema (Sair da tela cheia), os arquivos da LegatIA na tela inicial e o "+" de arquivo novo. Arquivo só nosso. |
+| `crates/ui-egui/src/legatia/fonts.rs` | A fonte da interface que a página entrega em tempo de execução (a Satoshi). Arquivo só nosso. |
+| `crates/ui-egui/src/app.rs` | Só ganchos: os painéis usam `legatia::panel_frame` (cartões flutuantes de vidro) e `legatia::backdrop` pinta o fundo preto atrás deles. |
+| `crates/ui-egui/src/panels/right.rs`, `tabs.rs`, `home.rs` | Só ganchos para `legatia::host` (botão principal, botões da barra de abas e "+", arquivos na tela inicial). Sem página que peça, tudo fica como no FigCraft. |
+| `apps/figcraft-web/src/api.rs`, `web.rs` | `figcraft.host(...)`, `figcraft.onhost`, `figcraft.thumbnail(bytes)` e `figcraft.uiFonts(regular, bold)` no `window.figcraft` (com `?control`). |
 | `assets/app-icon/legatia-64.png` | O ícone da LegatIA (listado no `ATTRIBUTION.md`). |
 | `apps/figcraft-web/index.html` | Título "LegatIA Design", fundo preto desde o primeiro quadro, "Carregando o editor…". |
 | `docs/brand/` | Removido: a licença da marca ArtCraft pede que forks tirem os logos. |
 | `.github/workflows/legatia-web.yml`, `LEGATIA_BASE`, este arquivo | A atualização automática e o build. |
 
-A fonte da interface continua a Inter (licença aberta). A Satoshi não vai no build porque a licença dela
+A fonte embutida continua a Inter (licença aberta). A Satoshi não vai no build porque a licença dela
 (ITF Free Font License) não permite redistribuir os arquivos, e a release é pública; o LegatIAdm carrega a
-Satoshi do Fontshare no editor para os designs.
+Satoshi do Fontshare em tempo de execução, para os designs (`text.loadFont`) e para a interface (`figcraft.uiFonts`).
 
 ## Atualização automática
 

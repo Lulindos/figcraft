@@ -89,6 +89,7 @@ impl eframe::App for WebShell {
         self.fig.control_queue.extend(crate::api::take_requests());
         self.fig.ui(ui);
         crate::api::poll_replies();
+        crate::api::deliver_host_events();
     }
 }
 

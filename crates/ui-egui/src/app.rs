@@ -267,11 +267,12 @@ impl FigApp {
         self.ui.narrow = narrow;
         // A narrow window shows the right panel when its button asks for it, a board's too.
         let right_open = (self.right_panel_shown(hidden) && !narrow) || mobile == Some(MobilePanel::Right);
+        crate::legatia::backdrop(ui, &t);
         if !hidden && (!narrow || mobile == Some(MobilePanel::Left)) {
             egui::Panel::left("left_rail")
                 .exact_size(56.0)
                 .resizable(false)
-                .frame(egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, t.border)))
+                .frame(crate::legatia::panel_frame(&t, true, false))
                 .show(ui, |ui| {
                     a11y::region(&mut self.ui.nav, ui, a11y::Region::Layers, egui::accesskit::Role::Navigation, i18n::tr("Sidebar"));
                     layers::rail(self, ui)
@@ -294,7 +295,7 @@ impl FigApp {
             egui::Panel::left("left_panel")
                 .resizable(false)
                 .exact_size(left_w)
-                .frame(egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, t.border)))
+                .frame(crate::legatia::panel_frame(&t, true, true))
                 .show(ui, |ui| {
                     let label = match self.ui.left_tab {
                         _ if self.ui.versions.open => i18n::tr("Version history"),
@@ -312,7 +313,7 @@ impl FigApp {
             egui::Panel::right("right_panel")
                 .resizable(false)
                 .exact_size(right_w)
-                .frame(egui::Frame::NONE.fill(t.panel).stroke(egui::Stroke::new(1.0, t.border)))
+                .frame(crate::legatia::panel_frame(&t, true, true))
                 .show(ui, |ui| {
                     let label = match self.ui.right_tab {
                         RightTab::Design => i18n::tr("Design"),

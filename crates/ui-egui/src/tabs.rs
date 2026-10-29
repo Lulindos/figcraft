@@ -238,12 +238,15 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
             ui.painter().rect_filled(nr, CornerRadius::same(5), t.hover);
         }
         icons::paint(ui.painter(), nr.shrink(7.0), Icon::Plus, t.icon);
-        if nresp.clicked() {
+        // LegatIA: new files are the host page's when it says so (it asks for a name and a project).
+        if nresp.clicked() && !crate::legatia::host::new_file() {
             pause_present(app);
             app.run("file.new", json!({}));
             app.ui.home = false;
         }
         let theme_r = theme_toggle(app, ui, &t, rect, buttons_w);
+        // LegatIA: the host page's buttons (Sair da tela cheia) left of the toggle.
+        let theme_r = crate::legatia::host::tab_bar_buttons(ui, &t, theme_r);
         if app.ui.title_bar != TitleBar::Native {
             drag_free_space(ui, rect, x + 34.0, theme_r.min.x);
         }

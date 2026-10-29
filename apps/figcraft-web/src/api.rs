@@ -22,6 +22,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use base64::Engine as _;
 use figcraft_ui_egui::{ControlReply, ControlRequest};
 use serde_json::{Value, json};
+use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
 use crate::saved_files::SavedFiles;
@@ -166,7 +167,77 @@ pub fn install() -> Result<(), JsValue> {
         })
         .into_js_value(),
     )?;
+    install_legatia(&obj)?;
     let w = web_sys::window().ok_or("no window")?;
     js_sys::Reflect::set(&w, &"figcraft".into(), &obj)?;
     Ok(())
+}
+
+/// LegatIA (`figcraft_ui_egui::legatia`): the page around the editor puts its buttons and files in
+/// it and gets their clicks back.
+///
+/// ```js
+/// figcraft.host({primary: {id: "save", label: "Salvar"}, buttons: [...], files: {...}, newFile: true})
+/// figcraft.onhost = (event) => { /* {type: "button", id} | {type: "open", id} | {type: "new"} */ }
+/// figcraft.thumbnail(bytes)        // the picture inside a .figcraft (PNG bytes), or null
+/// figcraft.uiFonts(regular, bold)  // the interface's typeface (font files)
+/// ```
+fn install_legatia(obj: &js_sys::Object) -> Result<(), JsValue> {
+    use figcraft_ui_egui::legatia;
+    set_fn(
+        obj,
+        "host",
+        Closure::<dyn Fn(JsValue) -> Result<(), JsValue>>::new(|state: JsValue| {
+            let state = if state.is_null() || state.is_undefined() { Value::Null } else { from_js(&state) };
+            legatia::host::set(state).map_err(|e| JsValue::from(js_sys::Error::new(&e)))?;
+            repaint();
+            Ok(())
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        obj,
+        "thumbnail",
+        Closure::<dyn Fn(js_sys::Uint8Array) -> JsValue>::new(|bytes: js_sys::Uint8Array| {
+            legatia::host::thumbnail_png(&bytes.to_vec()).map_or(JsValue::NULL, |png| js_sys::Uint8Array::from(png.as_slice()).into())
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        obj,
+        "uiFonts",
+        Closure::<dyn Fn(js_sys::Uint8Array, js_sys::Uint8Array)>::new(|regular: js_sys::Uint8Array, bold: js_sys::Uint8Array| {
+            CTX.with(|c| {
+                if let Some(ctx) = c.borrow().as_ref() {
+                    legatia::fonts::set(ctx, regular.to_vec(), bold.to_vec());
+                }
+            });
+        })
+        .into_js_value(),
+    )
+}
+
+fn repaint() {
+    CTX.with(|c| {
+        if let Some(ctx) = c.borrow().as_ref() {
+            ctx.request_repaint();
+        }
+    });
+}
+
+/// Hand the host page the clicks since the last frame (`figcraft.onhost`).
+pub fn deliver_host_events() {
+    let events = figcraft_ui_egui::legatia::host::take_events();
+    if events.is_empty() {
+        return;
+    }
+    let Some(w) = web_sys::window() else { return };
+    let Ok(api) = js_sys::Reflect::get(&w, &"figcraft".into()) else { return };
+    let Ok(handler) = js_sys::Reflect::get(&api, &"onhost".into()) else { return };
+    let Some(handler) = handler.dyn_ref::<js_sys::Function>() else { return };
+    for event in events {
+        if let Err(e) = handler.call1(&JsValue::NULL, &to_js(&event)) {
+            log::error!("figcraft.onhost failed: {e:?}");
+        }
+    }
 }
