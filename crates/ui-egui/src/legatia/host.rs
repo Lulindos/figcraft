@@ -9,7 +9,9 @@
 //! - `files`: the page's files on the home screen, instead of the recent files;
 //! - `newFile`: new files are the page's (the tab bar's + asks it);
 //! - `dockSlot`: points kept empty at the end of the tools' dock, where the page draws its own
-//!   button over the editor (the agent orb); `figcraft.dockSlot()` says where ([`dock_slot_rect`]).
+//!   button over the editor (the agent orb); `figcraft.dockSlot()` says where ([`dock_slot_rect`]);
+//! - `glass`: `"clear"` (panels translucent over the design, no blur) or `"off"` (solid panels, as
+//!   FigCraft's); anything else, the frosted glass ([`super::glass`]).
 //!
 //! Events: `{type: "button", id}`, `{type: "open", id}` (a file on the home screen) and
 //! `{type: "new"}`. Without a host (the desktop app, the plain web build) nothing changes.
@@ -34,6 +36,7 @@ pub struct Host {
     pub files: Option<Files>,
     pub new_file: bool,
     pub dock_slot: f32,
+    pub glass: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
