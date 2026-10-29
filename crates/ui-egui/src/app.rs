@@ -270,7 +270,7 @@ impl FigApp {
         crate::legatia::backdrop(ui, &t);
         if !hidden && (!narrow || mobile == Some(MobilePanel::Left)) {
             egui::Panel::left("left_rail")
-                .exact_size(56.0)
+                .exact_size(56.0 + crate::legatia::RAIL_GAP)
                 .resizable(false)
                 .frame(crate::legatia::panel_frame(&t, true, false))
                 .show(ui, |ui| {
