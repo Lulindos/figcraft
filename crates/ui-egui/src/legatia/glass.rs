@@ -98,11 +98,10 @@ pub fn canvas(ctx: &Context, texture: TextureId, rect: Rect) {
     update(ctx, |slot| slot.image = Some((texture, rect)));
 }
 
-/// Blurs a finished render for the cards.
+/// Blurs a finished render for the cards and the dock.
 pub fn frost(ctx: &Context, image: &ColorImage) {
     let [w, h] = image.size;
-    let panels = SLOT.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| !s.narrow && s.central.width() < s.full.width() - 1.0);
-    if w == 0 || h == 0 || !panels {
+    if w == 0 || h == 0 || !crate::theme::Tokens::get(ctx).dark {
         return;
     }
     let (fw, fh) = (w.div_ceil(STEP), h.div_ceil(STEP));
@@ -199,6 +198,25 @@ fn update(ctx: &Context, f: impl FnOnce(&mut Slot)) {
     }
     GLAZED.store(dark && !cards.is_empty(), Ordering::Relaxed);
     Painter::new(ctx.clone(), slot.layer, slot.full).set(slot.idx, Shape::Vec(shapes));
+}
+
+/// The tools' dock at `rect` (rounded by `radius`) as a small glass card over the design: the blurred
+/// design under it, the glass fill and the ring. False in the light theme or before a render (the
+/// toolbar then paints its own panel).
+pub fn dock(painter: &Painter, rect: Rect, radius: f32) -> bool {
+    let slot = SLOT.lock().unwrap_or_else(|e| e.into_inner());
+    let frost = FROST.lock().unwrap_or_else(|e| e.into_inner());
+    let (Some((_, image)), Some(frost)) = (slot.as_ref().and_then(|s| s.image), frost.as_ref()) else { return false };
+    if !crate::theme::Tokens::get(painter.ctx()).dark {
+        return false;
+    }
+    let uv = |p: Pos2| pos2((p.x - image.min.x) / image.width() * frost.covered[0], (p.y - image.min.y) / image.height() * frost.covered[1]);
+    let blurred = RectShape::filled(rect, CornerRadius::same(radius as u8), Color32::WHITE)
+        .with_texture(frost.texture.id(), Rect::from_min_max(uv(rect.min), uv(rect.max)));
+    painter.add(blurred);
+    painter.add(Shape::mesh(glass_fill(rect, radius)));
+    painter.add(Shape::mesh(ring(rect, radius)));
+    true
 }
 
 /// The cards around `central` in `full`, as [`super::panel_frame`] places them: the rail and the
