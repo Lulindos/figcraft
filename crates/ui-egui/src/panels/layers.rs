@@ -402,7 +402,7 @@ fn pages_edge(app: &mut FigApp, ui: &mut Ui, shown: f32) {
     if active {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
     }
-    let (width, colour) = if active { (2.0, ACCENT) } else { (1.0, t.border) };
+    let (width, colour) = if active { (2.0, ACCENT) } else { (1.0, crate::legatia::divider(&t)) };
     ui.painter().line_segment([line.left_center(), line.right_center()], Stroke::new(width, colour));
     let asked = if resp.double_clicked() {
         Some(None)
