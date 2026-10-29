@@ -106,11 +106,11 @@ pub fn rail(app: &mut FigApp, ui: &mut Ui) {
             a11y::tab(&resp, label, active);
         }
         if active {
-            ui.painter().rect_filled(ir, CornerRadius::same(6), t.selected_row);
+            crate::legatia::active_item(ui.painter(), ir, &t);
         } else if resp.hovered() {
             ui.painter().rect_filled(ir, CornerRadius::same(6), t.hover);
         }
-        icons::paint(ui.painter(), Rect::from_center_size(ir.center(), vec2(16.0, 16.0)), icon, if active { t.accent_text } else { t.icon });
+        icons::paint(ui.painter(), Rect::from_center_size(ir.center(), vec2(16.0, 16.0)), icon, if active { crate::legatia::active_icon(&t) } else { t.icon });
         let shown = crate::widgets::elide_font(ui, label, (r.width() - 6.0).max(0.0), regular(10.0));
         ui.painter().text(pos2(r.center().x, y + 38.0), Align2::CENTER_CENTER, shown, regular(10.0), t.text);
         if resp.clicked() {

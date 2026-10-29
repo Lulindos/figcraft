@@ -9,7 +9,8 @@
 //! Tokens are rewritten with struct update syntax (`..t`): a token upstream adds later keeps
 //! FigCraft's value until it is mapped here, instead of breaking the build.
 
-use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Stroke, Ui};
+use egui::text::{LayoutJob, TextFormat};
+use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Rect, Shape, Stroke, Ui, vec2};
 
 use crate::theme::Tokens;
 
@@ -48,16 +49,18 @@ fn dark(t: Tokens) -> Tokens {
         text_tertiary: rgb(0x8A, 0x8A, 0x90),
         icon: rgb(0xF5, 0xF5, 0xF7),
         icon_secondary: rgb(0xA6, 0xA6, 0xAD),
-        hover: rgb(0x17, 0x17, 0x1A),
-        pressed: rgb(0x22, 0x22, 0x27),
-        field: rgb(0x14, 0x14, 0x17),
+        // Translucent white, as the LegatIA glass (--glass-bg-*): the same over the panels' glass
+        // as over the opaque menus.
+        hover: Color32::from_white_alpha(13),
+        pressed: Color32::from_white_alpha(22),
+        field: Color32::from_white_alpha(12),
         field_hover_border: rgb(0x33, 0x33, 0x39),
         accent: BLUE_500,
         accent_hover: BLUE_400,
         accent_on: Color32::WHITE,
         accent_text: BLUE_300,
-        selected_row: BLUE_900,
-        selected_row_child: BLUE_950,
+        selected_row: Color32::from_rgba_unmultiplied(0x00, 0x6F, 0xFE, 0x48),
+        selected_row_child: Color32::from_rgba_unmultiplied(0x00, 0x6F, 0xFE, 0x22),
         danger: rgb(0xF8, 0x71, 0x71),
         warning: rgb(0xFB, 0x92, 0x3C),
         tab_bar: rgb(0x00, 0x00, 0x00),
@@ -97,14 +100,17 @@ pub fn paint_wordmark(painter: &Painter, left_center: Pos2, font: FontId, t: &To
 /// Between the panels, and around them.
 const PANEL_GAP: i8 = 6;
 /// The cards' corners.
-const PANEL_RADIUS: u8 = 14;
+const PANEL_RADIUS: u8 = 18;
 
-/// The side panels' frame: a glass card floating over the design, rounded, with the hairline of the
-/// LegatIA glass cards (white at 8%) and a translucent fill over the blurred design behind it
-/// ([`glass`]). `left`, `right`: the gap on that side.
+/// The side panels' frame: a card floating over the design, rounded like the LegatIA cards (18).
+/// In the dark theme its glass (blurred design, fill and ring) is painted behind it ([`glass`]), so
+/// the frame itself is clear; until then, and in the light theme, it has a fill and a hairline.
+/// `left`, `right`: the gap on that side.
 pub fn panel_frame(t: &Tokens, left: bool, right: bool) -> Frame {
-    let (fill, line) = if t.dark {
-        (Color32::from_rgba_unmultiplied(0x11, 0x11, 0x13, 0xC8), Color32::from_white_alpha(20))
+    let (fill, line) = if t.dark && glass::glazed() {
+        (Color32::TRANSPARENT, Color32::TRANSPARENT)
+    } else if t.dark {
+        (rgb(0x11, 0x11, 0x13), Color32::from_white_alpha(20))
     } else {
         (Color32::from_rgba_unmultiplied(t.panel.r(), t.panel.g(), t.panel.b(), 0xD0), t.border)
     };
@@ -126,6 +132,36 @@ pub fn backdrop(ui: &Ui, t: &Tokens) {
 /// The lines between a panel's sections and rows: none, the cards' spacing separates them.
 pub fn divider(_t: &Tokens) -> Color32 {
     Color32::TRANSPARENT
+}
+
+/// The active item of the left rail, as the LegatIA menu's: a glass pill with the glass ring (dark
+/// theme); the selected-row fill in the light one.
+pub fn active_item(painter: &Painter, rect: Rect, t: &Tokens) {
+    if !t.dark {
+        painter.rect_filled(rect, CornerRadius::same(6), t.selected_row);
+        return;
+    }
+    let r = rect.height() / 2.0;
+    painter.rect_filled(rect, CornerRadius::same(r as u8), Color32::from_white_alpha(10));
+    painter.add(Shape::mesh(glass::ring(rect, r)));
+}
+
+/// The active rail item's icon: white on the dark glass, the accent in the light theme.
+pub fn active_icon(t: &Tokens) -> Color32 {
+    if t.dark { t.icon } else { t.accent_text }
+}
+
+/// A panel section's title as the LegatIA section headings: a small square, then the title in capitals,
+/// monospaced, spaced out (`tracking-[0.18em]`), softer than the text. `left_center`: where it starts.
+pub fn section_title(painter: &Painter, left_center: Pos2, title: &str, dim: bool, t: &Tokens) {
+    const SIZE: f32 = 10.0;
+    painter.rect_filled(Rect::from_center_size(Pos2::new(left_center.x + 2.5, left_center.y), vec2(5.0, 5.0)), 0.0, t.text_tertiary);
+    let color = if dim { t.text_tertiary } else { t.text_secondary };
+    let mut job = LayoutJob::default();
+    let format = TextFormat { font_id: FontId::monospace(SIZE), color, extra_letter_spacing: SIZE * 0.18, ..Default::default() };
+    job.append(&title.to_uppercase(), 0.0, format);
+    let galley = painter.layout_job(job);
+    painter.galley(Pos2::new(left_center.x + 13.0, left_center.y - galley.size().y / 2.0), galley, color);
 }
 
 /// What the left rail grows by: its gap from the window edge ([`panel_frame`]), so its labels keep their room.
