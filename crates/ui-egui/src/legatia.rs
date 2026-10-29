@@ -40,20 +40,22 @@ fn dark(t: Tokens) -> Tokens {
         bg: rgb(0x0A, 0x0A, 0x0B),
         panel: rgb(0x0A, 0x0A, 0x0B),
         canvas: rgb(0x00, 0x00, 0x00),
-        border: rgb(0x1F, 0x1F, 0x23),
-        border_strong: rgb(0x2E, 0x2E, 0x33),
+        // The LegatIA tokens: hairlines are white at 10% and 16% (--glass-border, -hover), text white
+        // and white at 70% and 60% (fg, fg-soft, fg-mute), neutral greys with no tint.
+        border: Color32::from_white_alpha(26),
+        border_strong: Color32::from_white_alpha(41),
         text: rgb(0xFF, 0xFF, 0xFF),
-        text_secondary: rgb(0xB3, 0xB3, 0xB8),
+        text_secondary: rgb(0xB3, 0xB3, 0xB3),
         // At least 3:1 on panels, fields and selected rows, dimmer than text_secondary.
-        text_tertiary: rgb(0x8A, 0x8A, 0x90),
-        icon: rgb(0xF5, 0xF5, 0xF7),
-        icon_secondary: rgb(0xA6, 0xA6, 0xAD),
+        text_tertiary: rgb(0x99, 0x99, 0x99),
+        icon: rgb(0xF5, 0xF5, 0xF5),
+        icon_secondary: rgb(0x99, 0x99, 0x99),
         // Translucent white, as the LegatIA glass (--glass-bg-*): the same over the panels' glass
         // as over the opaque menus.
-        hover: Color32::from_white_alpha(13),
-        pressed: Color32::from_white_alpha(22),
-        field: Color32::from_white_alpha(12),
-        field_hover_border: rgb(0x33, 0x33, 0x39),
+        hover: Color32::from_white_alpha(20),
+        pressed: Color32::from_white_alpha(31),
+        field: Color32::from_white_alpha(15),
+        field_hover_border: Color32::from_white_alpha(31),
         accent: BLUE_500,
         accent_hover: BLUE_400,
         accent_on: Color32::WHITE,
@@ -65,8 +67,8 @@ fn dark(t: Tokens) -> Tokens {
         tab_bar: rgb(0x00, 0x00, 0x00),
         tab_active: Color32::from_white_alpha(14),
         shadow: Color32::from_black_alpha(160),
-        menu: rgb(0x0E, 0x0E, 0x10),
-        menu_hover: BLUE_600,
+        menu: rgb(0x11, 0x11, 0x13),
+        menu_hover: BLUE_500,
         focus: BLUE_400,
         ..t
     }
@@ -139,6 +141,16 @@ pub fn active_item(painter: &Painter, rect: Rect, t: &Tokens) {
         return;
     }
     painter.rect_filled(rect, CornerRadius::same((rect.height() / 2.0) as u8), Color32::from_white_alpha(16));
+}
+
+/// A secondary (not filled) button's edge: in the dark theme a light glass fill with no line, as the
+/// secondary buttons of LegatIA and macOS; the outline in the light theme.
+pub fn button_edge(painter: &Painter, rect: Rect, t: &Tokens) {
+    if t.dark {
+        painter.rect_filled(rect, CornerRadius::same(6), Color32::from_white_alpha(18));
+    } else {
+        painter.rect_stroke(rect, CornerRadius::same(5), Stroke::new(1.0, t.border_strong), egui::StrokeKind::Inside);
+    }
 }
 
 /// The active rail item's icon: white on the dark glass, the accent in the light theme.

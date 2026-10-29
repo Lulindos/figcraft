@@ -339,7 +339,7 @@ pub(crate) fn wide_button(ui: &mut Ui, label: &str) -> bool {
         if resp.hovered() {
             ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
         }
-        ui.painter().rect_stroke(r, CornerRadius::same(5), Stroke::new(1.0, t.border_strong), StrokeKind::Inside);
+        crate::legatia::button_edge(ui.painter(), r, &t);
         let galley = ui.painter().layout(label.to_string(), regular(11.0), t.text, w - 16.0);
         ui.painter().galley(r.center() - galley.size() / 2.0, galley, t.text);
         clicked = resp.clicked();

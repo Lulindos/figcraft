@@ -1110,7 +1110,7 @@ pub fn button(ui: &mut Ui, label: &str, primary: bool, enabled: bool) -> Respons
     };
     ui.painter().rect_filled(rect, CornerRadius::same(5), fill);
     if !primary {
-        ui.painter().rect_stroke(rect, CornerRadius::same(5), Stroke::new(1.0, t.border_strong), StrokeKind::Inside);
+        crate::legatia::button_edge(ui.painter(), rect, &t);
     }
     ui.painter().text(rect.center(), Align2::CENTER_CENTER, label, regular(11.0), text);
     resp
