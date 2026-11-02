@@ -6,6 +6,8 @@
 # build - builds the web version like FigCraft's own release (trunk, craft-fonts, craft-i18n) and
 #         publishes it as a release `<base>-legatia.<run>` with the zip and its SHA-256.
 #         LegatIAdm pins one of these in figcraft.web.json.
+# On demand: Actions > LegatIA web > Run workflow, or any push to `legatia` that is not only a .md file (a push syncs
+# with the latest FigCraft release first, then builds). The daily schedule can be late or skipped on a fork.
 # See LEGATIA.md.
 name: LegatIA web
 
