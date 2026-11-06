@@ -1,13 +1,15 @@
 # LegatIA: keeps the `legatia` branch on FigCraft's latest release and publishes the web build.
 #
 # sync  - every day (and on demand): when storytold/figcraft has a newer release than LEGATIA_BASE,
-#         replays the LegatIA commits on top of it (git rebase --onto). On a conflict nothing is
+#         merges it into `legatia` (no history is rewritten, no force-push). On a conflict nothing is
 #         published: an issue says which release and the branch stays where it was.
 # build - builds the web version like FigCraft's own release (trunk, craft-fonts, craft-i18n) and
 #         publishes it as a release `<base>-legatia.<run>` with the zip and its SHA-256.
 #         LegatIAdm pins one of these in figcraft.web.json.
 # On demand: Actions > LegatIA web > Run workflow, or any push to `legatia` that is not only a .md file (a push syncs
 # with the latest FigCraft release first, then builds). The daily schedule can be late or skipped on a fork.
+# A push that brings many files at once (a merge of a new FigCraft release) may not start the build: push a small
+# change afterwards, or run it by hand, and check Actions for the run.
 # See LEGATIA.md.
 name: LegatIA web
 
@@ -46,6 +48,7 @@ jobs:
       - id: sync
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           WANT: ${{ inputs.tag }}
           EVENT: ${{ github.event_name }}
         run: |
@@ -57,21 +60,37 @@ jobs:
           base=$(tr -d '[:space:]' < LEGATIA_BASE)
           latest=${WANT:-$(gh release view --repo storytold/figcraft --json tagName -q .tagName)}
           build=false
+          if ! git rev-parse --verify -q "refs/tags/$latest^{commit}" > /dev/null; then
+            echo "::error::FigCraft release $latest does not exist"
+            exit 1
+          fi
+          # A tag already in this branch's history (an older one asked for by hand) is not a new release
+          if [ "$latest" != "$base" ] && git merge-base --is-ancestor "$latest" HEAD; then
+            echo "FigCraft $latest is already in legatia (base $base): nothing to merge"
+            latest=$base
+          fi
           if [ "$latest" != "$base" ]; then
-            echo "FigCraft $latest is out (LegatIA is on $base): replaying the LegatIA commits"
-            if git rebase --onto "$latest" "$base" legatia; then
+            echo "FigCraft $latest is out (LegatIA is on $base): merging it"
+            if git merge --no-edit -m "LegatIA: merge FigCraft $latest" "$latest"; then
               echo "$latest" > LEGATIA_BASE
               git commit -qam "LegatIA: base $latest"
-              git push --force-with-lease origin legatia
-              base=$latest
-              build=true
+              if git push origin legatia; then
+                base=$latest
+                build=true
+              else
+                title="LegatIA: não consegui enviar a atualização para o FigCraft $latest"
+                if [ -z "$(gh issue list --state open --search "in:title \"$title\"" --json number -q '.[].number')" ]; then
+                  gh issue create --title "$title" --body "O merge do FigCraft $latest deu certo, mas o GitHub recusou o envio (provavelmente a release mexeu em \`.github/workflows\`, que o token do workflow não pode alterar). Nada foi publicado: a LegatIA continua na versão anterior. Para resolver: \`git fetch upstream --tags && git merge $latest\` no branch \`legatia\` e \`git push\`, de um computador com permissão."
+                fi
+                echo "::warning::push of the merge failed; issue opened, nothing published"
+              fi
             else
-              git rebase --abort
+              git merge --abort
               title="LegatIA: conflito ao atualizar para o FigCraft $latest"
               if [ -z "$(gh issue list --state open --search "in:title \"$title\"" --json number -q '.[].number')" ]; then
                 gh issue create --title "$title" --body "O FigCraft $latest mexeu nas mesmas linhas que as personalizações da LegatIA (branch \`legatia\`, base $base). Nada foi publicado: a LegatIA continua na versão anterior.
 
-          Para resolver: \`git rebase --onto $latest $base legatia\`, resolver os conflitos (as personalizações ficam em \`crates/ui-egui/src/legatia.rs\` e nas poucas linhas que chamam ele, ver LEGATIA.md), atualizar LEGATIA_BASE e dar push. O build roda sozinho."
+          Para resolver: \`git merge $latest\` no branch \`legatia\`, resolver os conflitos (as personalizações ficam em \`crates/ui-egui/src/legatia.rs\` e nas poucas linhas que chamam ele, ver LEGATIA.md), atualizar LEGATIA_BASE e dar push. O build roda sozinho."
               fi
               echo "::warning::conflict replaying LegatIA on $latest; issue opened, nothing published"
             fi
