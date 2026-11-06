@@ -33,8 +33,8 @@ Satoshi do Fontshare em tempo de execução, para os designs (`text.loadFont`) e
 
 `.github/workflows/legatia-web.yml` roda todo dia às 06:17 (e quando chamado em Actions ▸ LegatIA web):
 
-1. Se o FigCraft tem release mais nova que `LEGATIA_BASE`, reaplica os commits da LegatIA em cima dela
-   (`git rebase --onto <nova> <base> legatia`) e atualiza `LEGATIA_BASE`.
+1. Se o FigCraft tem release mais nova que `LEGATIA_BASE`, faz o merge dela no `legatia` (`git merge <nova>`)
+   e atualiza `LEGATIA_BASE`. Nada de rebase nem force-push: o histórico não é reescrito.
 2. Gera a versão web como a release do próprio FigCraft (trunk, craft-fonts na versão que o `release.yml`
    deles fixa, craft-i18n) e publica a release `<base>-legatia.<n>` com o zip e o SHA-256. As notas da
    release trazem o trecho pronto para o `figcraft.web.json` do LegatIAdm.
