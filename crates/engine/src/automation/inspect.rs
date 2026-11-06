@@ -551,6 +551,9 @@ pub fn document_with_options(s: &Session, depth: usize, all_pages: bool, options
         "kind": doc.kind.id(),
         "path": ds.path,
         "dirty": ds.is_dirty(),
+        // LegatIA: the editor's own change counter (the one its autosave watches). The undo labels above stop at 20 steps,
+        // so the host page could not tell a 21st edit from the 20th; this one grows with every change.
+        "revision": ds.revision,
         "currentPage": ds.page,
         "selection": ds.selection,
         "pages": pages,

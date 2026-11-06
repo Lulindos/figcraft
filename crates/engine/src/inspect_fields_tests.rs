@@ -84,6 +84,8 @@ fn empty_options_keep_the_main_tree_and_document_output() {
             ]
         },
         "id": s.ds().unwrap().uid,
+        // LegatIA: the document's change counter, for the host page's autosave (see automation/inspect.rs).
+        "revision": s.ds().unwrap().revision,
         "images": 0,
         "kind": "design",
         "name": "Untitled",
