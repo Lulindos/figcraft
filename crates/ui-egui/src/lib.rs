@@ -10,7 +10,11 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
     icon_png: Some(include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.figcraft.png")),
-    accent: Some([0x02, 0xda, 0x96]),
+    // LegatIA Design looks for its updates in this fork's releases (not ArtCraft's) and uses the brand blue.
+    name: "LegatIA Design",
+    repo: "Lulindos/figcraft",
+    developer: "Legat.IA",
+    accent: Some([0x00, 0x6f, 0xfe]),
     ..craft_update::suite::FIGCRAFT
 };
 

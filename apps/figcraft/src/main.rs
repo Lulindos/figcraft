@@ -26,6 +26,7 @@ mod args;
 mod control_server;
 mod gamepad;
 mod graphics;
+mod legatia_sync;
 mod recovery;
 mod services;
 mod startup;
@@ -127,6 +128,8 @@ impl eframe::App for App {
         // With the app out of reach (busy), its recovery copies stay for the next start.
         let copies = recovery::lock(&self.recovery).take();
         with_app(|fig| services::shutdown(fig, services::config_dir().as_deref(), copies));
+        // The sync program ends with the app, so an update can replace its files.
+        crate::legatia_sync::stop();
         // Everything is kept: end before the windows' teardown, where AppKit's Touch Bar support
         // throws on the content view AccessKit restores (craft-libs#3, #781).
         #[cfg(target_os = "macos")]
@@ -277,6 +280,7 @@ fn main() -> eframe::Result {
     let apple_events = apple_events::AppleEvents::install();
     #[cfg(target_os = "macos")]
     let apple_events = &apple_events;
+    legatia_sync::start();
     let result = eframe::run_native(
         "FigCraft",
         options,
@@ -304,6 +308,8 @@ fn main() -> eframe::Result {
             }))
         }),
     );
+    // A window that never opened skips `on_exit`: end the sync program here too.
+    legatia_sync::stop();
     let frames = window.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().map_or(0, egui::Context::cumulative_frame_nr);
     // Start again on other graphics, or say why instead of quitting silently: release builds on
     // Windows have no console.

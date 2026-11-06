@@ -47,6 +47,27 @@ Satoshi do Fontshare em tempo de execução, para os designs (`text.loadFont`) e
 
 Um push no branch `legatia` (uma mudança nossa) também gera uma release nova na mesma base.
 
+## App para Windows (instalador do time)
+
+Além da versão web, a LegatIA publica o app nativo como `figcraft-<versão>-windows-x64-portable.zip` numa
+release **estável** (`v<X.Y.Z>`, sem sufixo, não marcada como pré-lançamento) deste repositório. As releases
+da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualização do app as ignora.
+
+- O zip leva `figcraft.exe`, `figcraft-cli.exe`, `legatia-sync\` (o `node.exe` e o `sync.mjs` do LegatIAdm,
+  `npm run design:sync:bundle`) e o `install.ps1` / `Instalar.cmd`. O app abre o sincronizador junto e o encerra ao
+  sair (`apps/figcraft/src/legatia_sync.rs`), por isso uma atualização consegue trocar os arquivos.
+- `UPDATE_APP` (`crates/ui-egui/src/lib.rs`) aponta para `Lulindos/figcraft`. O aviso de versão nova aparece ao
+  abrir o app; "Baixar" fecha, troca os arquivos por cima da pasta e reabre.
+- `vendor/craft-update` é a cópia do crate de atualização do craft-libs (rev `c5a1cbf`) com **uma** mudança: o
+  upstream só instala atualização de binário com assinatura digital do mesmo editor, e a nossa build não tem
+  certificado. Aqui a garantia é o SHA-256 que o GitHub publica para o asset da nossa release (conferido no
+  download). Ao trocar para um app assinado, volte ao crate do craft-libs.
+- Para lançar uma versão: suba `[workspace.package] version` (X.Y.Z, maior que a anterior), compile com
+  `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS='-C target-feature=+crt-static'`
+  (`cargo build --release --locked -p figcraft -p figcraft-cli --target x86_64-pc-windows-msvc`), rode
+  `packaging/windows/team/package-team.ps1 -SyncDir <dist/legatia-sync>` e publique o zip numa release `v<versão>`.
+- O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
+
 ## Regras para mexer aqui
 
 - Personalização nova vai em `legatia.rs` sempre que der; no código do FigCraft, só a linha que chama ela.

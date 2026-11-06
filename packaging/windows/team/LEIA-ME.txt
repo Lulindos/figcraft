@@ -1,0 +1,23 @@
+﻿LegatIA Design - app para Windows
+=================================
+
+INSTALAR
+1. Extraia este zip inteiro (clique com o botão direito > Extrair tudo).
+2. Dê dois cliques em "Instalar.cmd".
+   Se o Windows mostrar "O Windows protegeu o computador": clique em "Mais informações" e depois em
+   "Executar assim mesmo". O app ainda não tem assinatura digital paga, por isso o aviso aparece só
+   nesta primeira vez.
+3. Abra o "LegatIA Design" pelo menu Iniciar.
+
+LIGAR À SUA CONTA
+No site (app.legatia.com.br), em Design, clique em "App no computador" e depois em
+"Conectar à minha conta". O app abre e salva os arquivos da sua conta pela pasta
+"LegatIA Design" do seu usuário. No canto da barra de abas aparece "Na LegatIA - versão N":
+Ctrl+S envia a versão nova.
+
+ATUALIZAR
+O app avisa quando há versão nova. Clique em "Baixar": ele fecha, troca os arquivos e volta sozinho.
+Se algo der errado, extraia o zip mais novo e rode "Instalar.cmd" de novo (feche o app antes).
+
+REMOVER
+Configurações > Aplicativos > LegatIA Design > Desinstalar. Os seus arquivos e preferências ficam.
