@@ -16,6 +16,7 @@ use crate::theme::Tokens;
 pub mod fonts;
 pub mod glass;
 pub mod host;
+pub mod sync;
 
 /// The LegatIA blue (#006FFE) and the steps of its scale used by the UI (LegatIA design system).
 pub const BLUE_300: Color32 = Color32::from_rgb(0x75, 0xB1, 0xFF);

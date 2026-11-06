@@ -1,34 +1,15 @@
-# FigCraft app icon
+# LegatIA Design app icon
 
-A **chameleon**: an engraving portrait in profile with a curled tail, in the Crafting Apps'
-owl-template framing (full-bleed field, head and body filling the tile, body running off the edges).
+The Legat.IA mark: a white "IA" on a black rounded square (the same as `public/favicon.png` in the
+LegatIAdm site). It replaces the upstream chameleon in the same files, so nothing else changes.
 
-## Palette
-
-Exactly three colours:
-
-| Colour | Hex | Used for |
-|---|---|---|
-| Ink | `#0b0b0c` | line work and contours |
-| Paper | `#efe9dc` | the figure |
-| FigCraft green (app colour) | `#02da96` | the full-bleed field |
-
-## Geometry
-
-A 512-unit tile (`viewBox="0 0 512 512"`), rounded square with `rx=112`, no border. The macOS
-renders pad it onto Apple's 824/1024 icon grid; Windows and Linux use the tile edge to edge, with
-its rounded corners, like the other Crafting Apps.
-
-## Provenance
-
-The owner's original engraving-style drawing (1500 px, keyed to the palette), supplied for
-FigCraft and vectorised. The source
-image is not kept in this repo. License: see `LICENSE.txt`.
+Geometry: a 1054-unit tile (`viewBox="0 0 1054 1054"`), `rx=190`, fill `#08090A`; the two white
+paths are `public/logo-ia.svg` in the site repository. Windows and Linux use the tile edge to edge;
+`packaging/macos/package.sh` pads it for the macOS grid.
 
 ## Files
 
-- `figcraft.svg`: canonical master (traced at 1500 px, the source's size).
-- `figcraft-small.svg`: lighter trace (traced at 1024 px); also the hicolor scalable icon.
+- `figcraft.svg`: canonical master. `figcraft-small.svg`: the same drawing (also the hicolor scalable icon).
 - `figcraft-<size>.png` (16–1024): renders on the macOS grid; `packaging/macos/package.sh` builds
   the `.icns` from them.
 - `figcraft.ico`: Windows icon, 16–256 px, embedded in the `.exe` by `apps/figcraft/build.rs`.

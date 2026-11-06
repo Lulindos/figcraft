@@ -105,6 +105,8 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
     egui::Panel::top("tab_bar").exact_size(HEIGHT).frame(egui::Frame::NONE.fill(crate::legatia::glass::bar(t.tab_bar))).show(ui, |ui| {
         let rect = ui.max_rect();
         let buttons_w = if app.ui.title_bar == TitleBar::Custom { window_buttons(app, ui, rect) } else { 0.0 };
+        // LegatIA: the sync button (state of the open file, save and send) takes room right of the tabs.
+        let sync_w = crate::legatia::sync::reserved(app, ui.ctx());
         let mut x = rect.min.x + if app.ui.title_bar == TitleBar::Inset { 76.0 } else { 8.0 };
         x += home_tab(app, ui, &t, x, rect);
         ui.painter().line_segment([pos2(x, rect.min.y), pos2(x, rect.max.y)], Stroke::new(1.0, t.border));
@@ -121,7 +123,7 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
         });
         let preferred: Vec<f32> = document_tabs.iter().map(|&i| preferred_width(app, i)).collect();
         // Leave the new-tab button, theme toggle, window controls and a draggable gap free.
-        let room = (rect.max.x - buttons_w - 70.0 - x - 34.0).max(0.0);
+        let room = (rect.max.x - buttons_w - sync_w - 70.0 - x - 34.0).max(0.0);
         let present_pref: Vec<f32> = app.ui.presents.iter().map(present_tab_width).collect();
         let present_on = app.ui.present.as_ref().and(app.ui.present_active);
         let active_present = present_on.and_then(|id| app.ui.presents.iter().position(|p| p.id == id));
@@ -248,6 +250,7 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
         let theme_r = theme_toggle(app, ui, &t, rect, buttons_w);
         // LegatIA: the host page's buttons (Sair da tela cheia) left of the toggle.
         let theme_r = crate::legatia::host::tab_bar_buttons(ui, &t, theme_r);
+        let theme_r = crate::legatia::sync::chip(app, ui, &t, theme_r);
         if crate::legatia::host::take_show_editor() {
             app.ui.home = false;
         }

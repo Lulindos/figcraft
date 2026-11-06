@@ -1,12 +1,12 @@
-FigCraft app icon (figcraft.svg, figcraft-small.svg and every file derived from them in this
-directory: figcraft-<size>.png, figcraft.ico, hicolor/).
+LegatIA Design app icon (figcraft.svg, figcraft-small.svg and every file derived from them in
+this directory: figcraft-<size>.png, figcraft.ico, hicolor/). The file names are the upstream ones
+so that the build, the packaging scripts and `cargo xtask icon` keep working.
 
-Original artwork made for this project by the project owner: an engraving-style drawing, then
-vectorised. No third-party material. Licensed like the rest of FigCraft, under either of
+The mark is the Legat.IA brand mark ("IA" on a black rounded square), (c) Legat.IA, all rights
+reserved. It is NOT covered by the Apache-2.0 / MIT licence of the rest of this repository: do not
+reuse it outside LegatIA Design.
 
-  * Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
-  * MIT license (https://opensource.org/licenses/MIT)
+The upstream FigCraft icon (a chameleon, MIT OR Apache-2.0, by the FigCraft project owner) that
+these files replace is at https://github.com/storytold/figcraft/tree/main/assets/app-icon.
 
-at your option.
-
-Regenerate the derived files with `cargo xtask icon`.
+`cargo xtask icon` rasterises figcraft.svg with resvg and regenerates the PNGs and the .ico.
