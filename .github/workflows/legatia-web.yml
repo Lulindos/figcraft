@@ -8,6 +8,8 @@
 #         LegatIAdm pins one of these in figcraft.web.json.
 # On demand: Actions > LegatIA web > Run workflow, or any push to `legatia` that is not only a .md file (a push syncs
 # with the latest FigCraft release first, then builds). The daily schedule can be late or skipped on a fork.
+# A push that brings many files at once (a merge of a new FigCraft release) may not start the build: push a small
+# change afterwards, or run it by hand, and check Actions for the run.
 # See LEGATIA.md.
 name: LegatIA web
 
