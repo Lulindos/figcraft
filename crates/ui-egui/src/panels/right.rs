@@ -113,7 +113,7 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     // take 1 pt off each side of the panel (240 pt by default)).
     let edge = ui.max_rect();
     app.ui.right_panel_rect = Some(edge);
-    ui.painter().line_segment([edge.left_top(), edge.left_bottom()], Stroke::new(1.0, t.border));
+    ui.painter().line_segment([edge.left_top(), edge.left_bottom()], Stroke::new(1.0, crate::legatia::divider(&t)));
     let w = ui.available_width();
     // Top bar: people (you and the others in a live session), present, share.
     let (top, _) = ui.allocate_exact_size(vec2(w, 48.0), Sense::hover());
