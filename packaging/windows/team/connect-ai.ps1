@@ -8,13 +8,18 @@
     - Claude Desktop      (claude_desktop_config.json)
     - Claude Code         (claude mcp add, para o seu usuário)
     - Cursor              (~\.cursor\mcp.json)
-  e mostra o trecho pronto para qualquer outra (Windsurf, Cline, Codex...), que também fica copiado.
+    - Antigravity         (~\.gemini\antigravity\mcp_config.json)
+    - Windsurf            (~\.codeium\windsurf\mcp_config.json)
+    - Codex               (~\.codex\config.toml)
+    - VS Code             (mcp.json do usuário)
+  e mostra o trecho pronto para qualquer outra, que também fica copiado.
 
   Duas entradas são criadas:
     legatia-design           mexe no app aberto, ao vivo (o app precisa estar aberto)
     legatia-design-offline   edita um arquivo sem abrir o app (sem janela; para tarefas em lote)
 
-  Antes de mudar o arquivo de uma IA, guarda uma cópia ao lado (.bak-legatia). Nada é enviado para fora.
+  Antes de mudar o arquivo de uma IA, guarda uma cópia ao lado (.bak-legatia) e só mexe nas entradas
+  da LegatIA: o resto da configuração fica como está. Nada é enviado para fora.
 
 .EXAMPLE
   .\connect-ai.ps1            pergunta uma a uma
@@ -29,18 +34,24 @@ param(
   # Caminhos para teste (ou instalações fora do padrão)
   [string] $ClaudeDesktopConfig,
   [string] $CursorConfig,
+  [string] $AntigravityConfig,
+  [string] $WindsurfConfig,
+  [string] $CodexConfig,
+  [string] $VSCodeConfig,
   [switch] $SemClaudeCode
 )
 $ErrorActionPreference = 'Stop'
 $Cli = Join-Path $Destino 'figcraft-cli.exe'
 if (-not (Test-Path -LiteralPath $Cli)) { throw "Não achei figcraft-cli.exe em $Destino" }
 $Nomes = @('legatia-design', 'legatia-design-offline')
+$Verbo = if ($Remover) { 'Remover' } else { 'Conectar' }
 
-function Get-Entries {
-  [ordered]@{
-    'legatia-design'         = [ordered]@{ command = $Cli; args = @('mcp', '--attach', "$Porta") }
-    'legatia-design-offline' = [ordered]@{ command = $Cli; args = @('mcp') }
-  }
+function Get-Entries([bool] $tipo = $false) {
+  $a = [ordered]@{ command = $Cli; args = @('mcp', '--attach', "$Porta") }
+  $b = [ordered]@{ command = $Cli; args = @('mcp') }
+  # O VS Code pede o tipo de cada servidor
+  if ($tipo) { $a = [ordered]@{ type = 'stdio' } + $a; $b = [ordered]@{ type = 'stdio' } + $b }
+  [ordered]@{ 'legatia-design' = $a; 'legatia-design-offline' = $b }
 }
 
 function Confirm-Step([string] $pergunta) {
@@ -49,8 +60,8 @@ function Confirm-Step([string] $pergunta) {
   return ($r -eq '' -or $r -match '^[sSyY]')
 }
 
-# Soma (ou tira) as entradas do bloco "mcpServers" de um arquivo JSON de configuração.
-function Set-McpFile([string] $caminho, [bool] $remover) {
+# Soma (ou tira) as entradas do bloco $chave ("mcpServers"; "servers" no VS Code) de um arquivo JSON de configuração.
+function Set-McpFile([string] $caminho, [bool] $remover, [string] $chave = 'mcpServers', [bool] $tipo = $false) {
   $existe = Test-Path -LiteralPath $caminho
   # Tirar as entradas de um arquivo que não existe, ou que não as tem, não muda nada (nem cria arquivo).
   if ($remover -and -not $existe) { return }
@@ -58,21 +69,53 @@ function Set-McpFile([string] $caminho, [bool] $remover) {
   if ($existe) {
     $texto = Get-Content -LiteralPath $caminho -Raw -Encoding UTF8
     if ($texto.Trim()) { $obj = $texto | ConvertFrom-Json }
-    if ($remover -and -not ($obj -and $obj.PSObject.Properties['mcpServers'] -and ($Nomes | Where-Object { $obj.mcpServers.PSObject.Properties[$_] }))) { return }
+    if ($remover -and -not ($obj -and $obj.PSObject.Properties[$chave] -and ($Nomes | Where-Object { $obj.$chave.PSObject.Properties[$_] }))) { return }
     Copy-Item -LiteralPath $caminho -Destination "$caminho.bak-legatia" -Force
   }
   if (-not $obj) { $obj = [pscustomobject]@{} }
-  if (-not $obj.PSObject.Properties['mcpServers']) { $obj | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) }
-  foreach ($nome in $Nomes) { $obj.mcpServers.PSObject.Properties.Remove($nome) }
+  if (-not $obj.PSObject.Properties[$chave]) { $obj | Add-Member -NotePropertyName $chave -NotePropertyValue ([pscustomobject]@{}) }
+  foreach ($nome in $Nomes) { $obj.$chave.PSObject.Properties.Remove($nome) }
   if (-not $remover) {
-    foreach ($e in (Get-Entries).GetEnumerator()) {
-      $obj.mcpServers | Add-Member -NotePropertyName $e.Key -NotePropertyValue ([pscustomobject]$e.Value)
+    foreach ($e in (Get-Entries $tipo).GetEnumerator()) {
+      $obj.$chave | Add-Member -NotePropertyName $e.Key -NotePropertyValue ([pscustomobject]$e.Value)
     }
   }
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $caminho) | Out-Null
   $json = $obj | ConvertTo-Json -Depth 20
   # UTF-8 sem BOM, como as IAs gravam
   [IO.File]::WriteAllText($caminho, $json, (New-Object Text.UTF8Encoding($false)))
+}
+
+# O Codex guarda tudo em TOML: mexe só nos blocos da LegatIA e deixa o resto do arquivo como está.
+function Set-CodexToml([string] $caminho, [bool] $remover) {
+  $existe = Test-Path -LiteralPath $caminho
+  if ($remover -and -not $existe) { return }
+  $texto = if ($existe) { [IO.File]::ReadAllText($caminho) } else { '' }
+  $nl = if ($texto -match "`r`n") { "`r`n" } else { "`n" }
+  # Um bloco vai do cabeçalho [mcp_servers.legatia-design...] até a linha antes do próximo cabeçalho.
+  $linhas = $texto -split "\r?\n"
+  $mantidas = New-Object System.Collections.Generic.List[string]
+  $dentro = $false
+  $achou = $false
+  foreach ($linha in $linhas) {
+    if ($linha -match '^\s*\[') {
+      $dentro = ($linha -match '^\s*\[mcp_servers\.(legatia-design|legatia-design-offline)(\.[^\]]*)?\]')
+      if ($dentro) { $achou = $true }
+    }
+    if (-not $dentro) { $mantidas.Add($linha) }
+  }
+  if ($remover -and -not $achou) { return }
+  if ($existe) { Copy-Item -LiteralPath $caminho -Destination "$caminho.bak-legatia" -Force }
+  $limpo = ($mantidas -join $nl).TrimEnd()
+  if (-not $remover) {
+    $blocos = @(
+      '[mcp_servers.legatia-design]', "command = '$Cli'", ('args = ["mcp", "--attach", "' + $Porta + '"]'), '',
+      '[mcp_servers.legatia-design-offline]', "command = '$Cli'", 'args = ["mcp"]'
+    ) -join $nl
+    $limpo = if ($limpo) { $limpo + $nl + $nl + $blocos } else { $blocos }
+  }
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $caminho) | Out-Null
+  [IO.File]::WriteAllText($caminho, $limpo + $nl, (New-Object Text.UTF8Encoding($false)))
 }
 
 $feitos = @()
@@ -85,34 +128,60 @@ if (-not $desktop) {
     ForEach-Object { Join-Path $_.FullName 'LocalCache\Roaming\Claude\claude_desktop_config.json' })
   $desktop = $candidatos | Where-Object { Test-Path -LiteralPath (Split-Path -Parent $_) } | Select-Object -First 1
 }
-if ($desktop) {
-  if (Confirm-Step "Claude Desktop encontrado ($desktop). $(if ($Remover) { 'Remover' } else { 'Conectar' })?") {
-    Set-McpFile $desktop $Remover.IsPresent
-    $feitos += 'Claude Desktop (feche e abra o Claude Desktop de novo)'
-  }
+if ($desktop -and (Confirm-Step "Claude Desktop encontrado ($desktop). ${Verbo}?")) {
+  Set-McpFile $desktop $Remover.IsPresent
+  $feitos += 'Claude Desktop (feche e abra o Claude Desktop de novo)'
 }
 
 # ---- Cursor -------------------------------------------------------------------------------------
 $cursor = $CursorConfig
 if (-not $cursor -and (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.cursor'))) { $cursor = Join-Path $env:USERPROFILE '.cursor\mcp.json' }
-if ($cursor) {
-  if (Confirm-Step "Cursor encontrado ($cursor). $(if ($Remover) { 'Remover' } else { 'Conectar' })?") {
-    Set-McpFile $cursor $Remover.IsPresent
-    $feitos += 'Cursor (reinicie o Cursor)'
-  }
+if ($cursor -and (Confirm-Step "Cursor encontrado ($cursor). ${Verbo}?")) {
+  Set-McpFile $cursor $Remover.IsPresent
+  $feitos += 'Cursor (reinicie o Cursor)'
+}
+
+# ---- Antigravity --------------------------------------------------------------------------------
+$antigravity = $AntigravityConfig
+if (-not $antigravity -and (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.gemini\antigravity'))) { $antigravity = Join-Path $env:USERPROFILE '.gemini\antigravity\mcp_config.json' }
+if ($antigravity -and (Confirm-Step "Antigravity encontrado ($antigravity). ${Verbo}?")) {
+  Set-McpFile $antigravity $Remover.IsPresent
+  $feitos += 'Antigravity (reinicie o Antigravity)'
+}
+
+# ---- Windsurf -----------------------------------------------------------------------------------
+$windsurf = $WindsurfConfig
+if (-not $windsurf -and (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.codeium\windsurf'))) { $windsurf = Join-Path $env:USERPROFILE '.codeium\windsurf\mcp_config.json' }
+if ($windsurf -and (Confirm-Step "Windsurf encontrado ($windsurf). ${Verbo}?")) {
+  Set-McpFile $windsurf $Remover.IsPresent
+  $feitos += 'Windsurf (reinicie o Windsurf)'
+}
+
+# ---- VS Code ------------------------------------------------------------------------------------
+$vscode = $VSCodeConfig
+if (-not $vscode -and (Test-Path -LiteralPath (Join-Path $env:APPDATA 'Code\User'))) { $vscode = Join-Path $env:APPDATA 'Code\User\mcp.json' }
+if ($vscode -and (Confirm-Step "VS Code encontrado ($vscode). ${Verbo}?")) {
+  Set-McpFile $vscode $Remover.IsPresent 'servers' $true
+  $feitos += 'VS Code (recarregue a janela)'
+}
+
+# ---- Codex --------------------------------------------------------------------------------------
+$codex = $CodexConfig
+if (-not $codex -and (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.codex'))) { $codex = Join-Path $env:USERPROFILE '.codex\config.toml' }
+if ($codex -and (Confirm-Step "Codex encontrado ($codex). ${Verbo}?")) {
+  Set-CodexToml $codex $Remover.IsPresent
+  $feitos += 'Codex (vale nas próximas sessões)'
 }
 
 # ---- Claude Code --------------------------------------------------------------------------------
 $claude = if ($SemClaudeCode) { $null } else { Get-Command claude -ErrorAction SilentlyContinue }
-if ($claude) {
-  if (Confirm-Step "Claude Code encontrado. $(if ($Remover) { 'Remover' } else { 'Conectar' }) para o seu usuário?") {
-    foreach ($nome in $Nomes) { & $claude.Source mcp remove $nome --scope user 2>$null | Out-Null }
-    if (-not $Remover) {
-      & $claude.Source mcp add --scope user legatia-design -- $Cli mcp --attach "$Porta" | Out-Null
-      & $claude.Source mcp add --scope user legatia-design-offline -- $Cli mcp | Out-Null
-    }
-    $feitos += 'Claude Code (vale nas próximas conversas)'
+if ($claude -and (Confirm-Step "Claude Code encontrado. ${Verbo} para o seu usuário?")) {
+  foreach ($nome in $Nomes) { & $claude.Source mcp remove $nome --scope user 2>$null | Out-Null }
+  if (-not $Remover) {
+    & $claude.Source mcp add --scope user legatia-design -- $Cli mcp --attach "$Porta" | Out-Null
+    & $claude.Source mcp add --scope user legatia-design-offline -- $Cli mcp | Out-Null
   }
+  $feitos += 'Claude Code (vale nas próximas conversas)'
 }
 
 # ---- Qualquer outra IA --------------------------------------------------------------------------
@@ -122,7 +191,7 @@ if ($feitos.Count) { Write-Output 'Conectado em:'; $feitos | ForEach-Object { Wr
 else { Write-Output 'Nenhuma IA conectada.' }
 if (-not $Remover) {
   Write-Output ''
-  Write-Output 'Para outra IA (Windsurf, Cline, Codex...), cole este trecho no arquivo de MCP dela:'
+  Write-Output 'Para outra IA (Cline, Zed, Continue...), cole este trecho no arquivo de MCP dela:'
   Write-Output $trecho
   try { Set-Clipboard -Value $trecho; Write-Output '(o trecho já está copiado)' } catch { }
   Write-Output ''

@@ -22,7 +22,7 @@ rode Instalar.cmd de novo depois. As fontes do Google que faltarem num arquivo o
 
 IA MEXENDO NO EDITOR (MCP)
 No fim da instalação o instalador oferece ligar as IAs do computador (Claude Desktop, Claude Code,
-Cursor) ao editor. Para fazer depois, ou para outra IA, rode "Conectar-IA.cmd": ele mostra o trecho
+Cursor, Antigravity, Windsurf, Codex, VS Code) ao editor. Para fazer depois, ou para outra IA, rode "Conectar-IA.cmd": ele mostra o trecho
 de configuração pronto para colar em qualquer IA que use MCP.
 - legatia-design: a IA mexe no app aberto, ao vivo (o app abre um canal local na porta 47800, só
   acessível neste computador).
