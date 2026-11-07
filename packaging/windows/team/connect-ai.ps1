@@ -52,10 +52,13 @@ function Confirm-Step([string] $pergunta) {
 # Soma (ou tira) as entradas do bloco "mcpServers" de um arquivo JSON de configuração.
 function Set-McpFile([string] $caminho, [bool] $remover) {
   $existe = Test-Path -LiteralPath $caminho
+  # Tirar as entradas de um arquivo que não existe, ou que não as tem, não muda nada (nem cria arquivo).
+  if ($remover -and -not $existe) { return }
   $obj = $null
   if ($existe) {
     $texto = Get-Content -LiteralPath $caminho -Raw -Encoding UTF8
     if ($texto.Trim()) { $obj = $texto | ConvertFrom-Json }
+    if ($remover -and -not ($obj -and $obj.PSObject.Properties['mcpServers'] -and ($Nomes | Where-Object { $obj.mcpServers.PSObject.Properties[$_] }))) { return }
     Copy-Item -LiteralPath $caminho -Destination "$caminho.bak-legatia" -Force
   }
   if (-not $obj) { $obj = [pscustomobject]@{} }
