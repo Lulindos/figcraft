@@ -66,6 +66,8 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS='-C target-feature=+crt-static'`
   (`cargo build --release --locked -p figcraft -p figcraft-cli --target x86_64-pc-windows-msvc`), rode
   `packaging/windows/team/package-team.ps1 -SyncDir <dist/legatia-sync>` e publique o zip numa release `v<versão>`.
+- **Fonte:** a Satoshi não vai no zip (licença). O `install.ps1` roda `legatia-synconts.mjs` (baixa do Fontshare, renomeia a família como o site faz) e instala por usuário em `%LOCALAPPDATA%\Microsoft\Windows\Fonts` como `LegatIA-Satoshi-*.ttf`; o app lê esses arquivos para a interface (`apps/figcraft/src/legatia_fonts.rs`) e os textos dos designs a acham como fonte do sistema.
+- **IA (MCP):** os atalhos abrem o app com `--control 47800` (canal só em 127.0.0.1). `connect-ai.ps1` / `Conectar-IA.cmd` registra `figcraft-cli mcp --attach 47800` (`legatia-design`, ao vivo) e `figcraft-cli mcp` (`legatia-design-offline`) no Claude Desktop, Claude Code e Cursor, e mostra o trecho para qualquer outra IA. Não há token nesse canal: qualquer programa do computador pode usá-lo.
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 
 ## Regras para mexer aqui

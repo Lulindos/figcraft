@@ -38,7 +38,7 @@ foreach ($line in Get-Content (Join-Path $Root 'Cargo.toml')) {
 if (-not $Version) { throw 'não achei [workspace.package] version em Cargo.toml' }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "a versão $Version não é estável (X.Y.Z): o verificador de atualização só oferece versões estáveis" }
 
-foreach ($f in (Join-Path $Bin 'figcraft.exe'), (Join-Path $Bin 'figcraft-cli.exe'), $NodeExe, (Join-Path $SyncDir 'sync.mjs')) {
+foreach ($f in (Join-Path $Bin 'figcraft.exe'), (Join-Path $Bin 'figcraft-cli.exe'), $NodeExe, (Join-Path $SyncDir 'sync.mjs'), (Join-Path $SyncDir 'fonts.mjs')) {
   if (-not (Test-Path -LiteralPath $f)) { throw "faltou: $f" }
 }
 
@@ -48,8 +48,8 @@ Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'legatia-sync') | Out-Null
 Copy-Item (Join-Path $Bin 'figcraft.exe'), (Join-Path $Bin 'figcraft-cli.exe') $Stage
 Copy-Item $NodeExe (Join-Path $Stage 'legatia-sync\node.exe')
-Copy-Item (Join-Path $SyncDir 'sync.mjs') (Join-Path $Stage 'legatia-sync\sync.mjs')
-foreach ($f in 'install.ps1', 'Instalar.cmd', 'LEIA-ME.txt') { Copy-Item (Join-Path $PSScriptRoot $f) $Stage }
+Copy-Item (Join-Path $SyncDir 'sync.mjs'), (Join-Path $SyncDir 'fonts.mjs') (Join-Path $Stage 'legatia-sync')
+foreach ($f in 'install.ps1', 'Instalar.cmd', 'connect-ai.ps1', 'Conectar-IA.cmd', 'LEIA-ME.txt') { Copy-Item (Join-Path $PSScriptRoot $f) $Stage }
 foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
   $p = Join-Path $Root $f
   if (Test-Path $p) { Copy-Item $p $Stage }

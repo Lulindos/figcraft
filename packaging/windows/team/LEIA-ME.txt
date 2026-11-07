@@ -15,6 +15,20 @@ No site (app.legatia.com.br), em Design, clique em "App no computador" e depois 
 "LegatIA Design" do seu usuário. No canto da barra de abas aparece "Na LegatIA - versão N":
 Ctrl+S envia a versão nova.
 
+FONTE
+O instalador baixa a Satoshi (a fonte da Legat.IA) do Fontshare e instala só para o seu usuário. Ela
+não vai dentro do zip porque a licença não deixa distribuir os arquivos. Sem internet na instalação,
+rode Instalar.cmd de novo depois. As fontes do Google que faltarem num arquivo o app baixa sozinho.
+
+IA MEXENDO NO EDITOR (MCP)
+No fim da instalação o instalador oferece ligar as IAs do computador (Claude Desktop, Claude Code,
+Cursor) ao editor. Para fazer depois, ou para outra IA, rode "Conectar-IA.cmd": ele mostra o trecho
+de configuração pronto para colar em qualquer IA que use MCP.
+- legatia-design: a IA mexe no app aberto, ao vivo (o app abre um canal local na porta 47800, só
+  acessível neste computador).
+- legatia-design-offline: a IA edita um arquivo sem abrir o app.
+Depois de ligar, reinicie a IA e peça, por exemplo: "use o legatia-design e crie um card azul".
+
 ATUALIZAR
 O app avisa quando há versão nova. Clique em "Baixar": ele fecha, troca os arquivos e volta sozinho.
 Se algo der errado, extraia o zip mais novo e rode "Instalar.cmd" de novo (feche o app antes).
