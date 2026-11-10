@@ -29,17 +29,23 @@ de configuração pronto para colar em qualquer IA que use MCP.
 - legatia-design-offline: a IA edita um arquivo sem abrir o app.
 Depois de ligar, reinicie a IA e peça, por exemplo: "use o legatia-design e crie um card azul".
 
+A HOME
+Ao abrir o app, a Home mostra quem está conectado (o seu perfil da LegatIA) e os projetos que a LegatIA deixa você ver,
+com os arquivos de cada um. Clique num arquivo para abrir. A etiqueta sobre ele conta o que precisa de atenção (baixando,
+alterado aqui, versão nova na nuvem, em edição por outra pessoa). "Novo arquivo", "Novo quadro" e "Abrir arquivo" ficam no topo.
+
 SALVAR E O ORBE
 No canto direito do painel, o botão "Salvar na LegatIA" mostra o estado do arquivo aberto (salvo na nuvem, enviando,
 em edição por outra pessoa...) e, ao clicar, salva e envia a versão nova. Ctrl+S faz o mesmo.
 No fim da barra de ferramentas fica o orbe azul: clique, escolha qual IA do computador vai receber o pedido e escreva o
 que ela deve fazer. Claude Code e Codex trabalham sozinhos e a resposta aparece no painel; as outras (Claude Desktop,
-Antigravity, Windsurf, Cursor, VS Code) abrem com o pedido copiado: cole e dê Enter. Elas precisam ter sido ligadas
-pelo Conectar-IA.cmd.
+Antigravity, Windsurf, Cursor, VS Code) abrem com o pedido copiado: cole e dê Enter. Na primeira vez que você manda
+um pedido a uma delas, o app a liga ao editor sozinho (acrescenta as entradas da LegatIA à configuração de MCP dela, com uma
+cópia do arquivo antigo ao lado) e avisa: se ela já estava aberta, feche e abra de novo. Não precisa rodar o Conectar-IA.cmd.
 
 ATUALIZAR
-O app avisa quando há versão nova. Clique em "Baixar": ele fecha, troca os arquivos e volta sozinho.
-Se algo der errado, extraia o zip mais novo e rode "Instalar.cmd" de novo (feche o app antes).
+O app avisa quando há versão nova. Salve o trabalho aberto e clique em "Atualizar e reiniciar": ele fecha, troca os
+arquivos e volta sozinho. Se algo der errado, extraia o zip mais novo e rode "Instalar.cmd" de novo (feche o app antes).
 
 REMOVER
 Configurações > Aplicativos > LegatIA Design > Desinstalar. Os seus arquivos e preferências ficam.

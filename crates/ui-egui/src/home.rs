@@ -145,7 +145,7 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.panel)).show(ui, |ui| {
         let rect = ui.max_rect();
         let left = Rect::from_min_size(rect.min, vec2(SIDEBAR, rect.height()));
-        ui.painter().line_segment([left.right_top(), left.right_bottom()], Stroke::new(1.0, t.border));
+        ui.painter().line_segment([left.right_top(), left.right_bottom()], Stroke::new(1.0, crate::legatia::divider(&t)));
         sidebar(app, ui, &t, left);
         if app.ui.home_view.file_query.trim().is_empty() && app.ui.home_view.section == Section::Online {
             // Your online files lay themselves out in the area (and scroll their own list).
@@ -155,6 +155,9 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
             return;
         }
         let main = Rect::from_min_max(pos2(left.max.x, rect.min.y), rect.max);
+        // LegatIA (desktop app): the blue aurora behind the content
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::legatia::home::aurora(ui, &t, main);
         ui.scope_builder(egui::UiBuilder::new().max_rect(main), |ui| {
             egui::ScrollArea::vertical().id_salt("home").auto_shrink([false, false]).show(ui, |ui| {
                 egui::Frame::NONE.inner_margin(egui::Margin::symmetric(40, 24)).show(ui, |ui| {
@@ -213,12 +216,20 @@ fn sidebar(app: &mut FigApp, ui: &mut Ui, t: &Tokens, left: Rect) {
     });
     y += widgets::FIELD_H + 12.0;
     for (section, icon, label) in Section::ALL {
+        // LegatIA (desktop app): FigCraft's online collaboration (its servers) is not part of LegatIA
+        #[cfg(not(target_arch = "wasm32"))]
+        if !cfg!(test) && section == Section::Online {
+            continue;
+        }
         let r = Rect::from_min_size(pos2(left.min.x + 8.0, y), vec2(SIDEBAR - 16.0, 32.0));
         let resp = ui.interact(r, ui.scope_id().with(("home_section", label)), Sense::click());
         let current = app.ui.home_view.file_query.trim().is_empty() && app.ui.home_view.section == section;
         a11y::tab(&resp, tr(label), current);
-        if current || resp.hovered() {
-            ui.painter().rect_filled(r, CornerRadius::same(5), if current { t.selected_row } else { t.hover });
+        if current {
+            // LegatIA: the active item is a pill of light glass, as in the menu of the site
+            crate::legatia::active_item(ui.painter(), r, t);
+        } else if resp.hovered() {
+            ui.painter().rect_filled(r, CornerRadius::same(5), t.hover);
         }
         focus_ring(ui, t, r, &resp, 5);
         icons::paint(ui.painter(), Rect::from_min_size(pos2(r.min.x + 10.0, r.center().y - 8.0), vec2(16.0, 16.0)), icon, t.icon);
@@ -329,6 +340,12 @@ fn action_card(ui: &mut Ui, t: &Tokens, icon: Icon, title: &str, sub: &str) -> b
 }
 
 fn recents(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
+    // LegatIA (desktop app): its own Home (who is connected, the projects, the actions), drawn instead of FigCraft's.
+    // FigCraft's own tests run on FigCraft's Home (still the web build's); ours has its tests in `legatia::home`.
+    #[cfg(not(target_arch = "wasm32"))]
+    if !cfg!(test) && crate::legatia::home::layout(app, ui, t) {
+        return;
+    }
     // LegatIA: the host page's files instead of the recent files.
     if let Some(files) = crate::legatia::host::files() {
         heading(ui, t, tr("Recents"));

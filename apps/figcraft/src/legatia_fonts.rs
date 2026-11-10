@@ -22,5 +22,7 @@ pub fn load(ctx: &egui::Context) {
     let (Ok(regular), Ok(medium)) = (std::fs::read(dir.join("LegatIA-Satoshi-Regular.ttf")), std::fs::read(dir.join("LegatIA-Satoshi-Medium.ttf"))) else {
         return;
     };
-    figcraft_ui_egui::legatia::fonts::set(ctx, regular, medium);
+    // Light is only for the big titles on the home screen; without it they use Regular
+    let light = std::fs::read(dir.join("LegatIA-Satoshi-Light.ttf")).ok();
+    figcraft_ui_egui::legatia::fonts::set_with_light(ctx, regular, medium, light);
 }

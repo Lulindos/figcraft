@@ -17,6 +17,8 @@ use crate::theme::Tokens;
 pub mod agent;
 pub mod fonts;
 pub mod glass;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod home;
 pub mod host;
 pub mod strands;
 pub mod sync;
@@ -167,6 +169,7 @@ pub const RAIL_GAP: f32 = PANEL_GAP as f32;
 
 /// The words of the update windows (`craft-update` keeps them in English, and the English text is
 /// the key) in Portuguese. A text it does not know stays as the crate wrote it.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn update_text(text: &str, args: &[(&str, &str)]) -> String {
     let pt = match text {
         "Update" => "Nova versão",

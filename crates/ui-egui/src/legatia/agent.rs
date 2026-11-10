@@ -155,10 +155,21 @@ fn find_codex() -> Option<PathBuf> {
     None
 }
 
-fn store_app(prefix: &str) -> Option<String> {
+fn store_family(prefix: &str) -> Option<String> {
     let packages = env_path("LOCALAPPDATA")?.join("Packages");
-    let family = std::fs::read_dir(packages).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).find(|n| n.starts_with(prefix))?;
-    Some(format!("shell:AppsFolder\\{family}!Claude"))
+    std::fs::read_dir(packages).ok()?.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).find(|n| n.starts_with(prefix))
+}
+
+fn store_app(prefix: &str) -> Option<String> {
+    Some(format!("shell:AppsFolder\\{}!Claude", store_family(prefix)?))
+}
+
+/// A configuração do Claude Desktop: a do pacote da Microsoft Store quando ele é esse, senão a de `%APPDATA%\\Claude`.
+fn claude_desktop_config(roaming: &Path, local: &Path) -> PathBuf {
+    let plain = roaming.join("Claude").join("claude_desktop_config.json");
+    let Some(family) = store_family("Claude_") else { return plain };
+    let packaged = local.join("Packages").join(family).join("LocalCache").join("Roaming").join("Claude").join("claude_desktop_config.json");
+    if packaged.parent().is_some_and(Path::is_dir) { packaged } else { plain }
 }
 
 fn detect() -> Vec<Ai> {
@@ -173,7 +184,7 @@ fn detect() -> Vec<Ai> {
         out.push(Ai { name: "Codex", how: How::Codex(exe), config: None });
     }
     if let Some(app) = store_app("Claude_") {
-        out.push(Ai { name: "Claude Desktop", how: How::Open(Launch::Store(app)), config: Some(roaming.join("Claude").join("claude_desktop_config.json")) });
+        out.push(Ai { name: "Claude Desktop", how: How::Open(Launch::Store(app)), config: Some(claude_desktop_config(&roaming, &local)) });
     } else if local.join("AnthropicClaude").is_dir() {
         let exe = local.join("AnthropicClaude").join("claude.exe");
         if exe.is_file() {
@@ -347,6 +358,82 @@ fn spawn_run(ctx: egui::Context, ai: Ai, text: String) {
     });
 }
 
+// ---------------------------------------------------------------------------------------------- ligar a IA ao editor
+
+/// As duas entradas da LegatIA, como texto JSON (sem a vírgula do fim): ao vivo (`--attach`) e sem abrir o app.
+fn entries_json(cli: &Path, port: u16, typed: bool) -> String {
+    let cli = serde_json::to_string(&cli.to_string_lossy()).unwrap_or_else(|_| "\"\"".into());
+    let kind = if typed { "\"type\": \"stdio\", " } else { "" };
+    format!(
+        "\"{SERVER}\": {{ {kind}\"command\": {cli}, \"args\": [\"mcp\", \"--attach\", \"{port}\"] }},\n    \"{SERVER}-offline\": {{ {kind}\"command\": {cli}, \"args\": [\"mcp\"] }}"
+    )
+}
+
+/// Acrescenta as entradas da LegatIA ao bloco `key` do arquivo JSON de configuração de MCP de uma IA (`mcpServers`; `servers` no VS Code),
+/// sem mexer no resto do texto, com uma cópia do arquivo antigo ao lado (`.bak-legatia`, só na primeira vez). Arquivo que não existe é criado;
+/// um que não é JSON puro (comentários, por exemplo) fica como está e a pessoa recebe o aviso. Já tendo as entradas, não faz nada.
+fn add_entries(path: &Path, cli: &Path, port: u16, key: &str, typed: bool) -> Result<(), String> {
+    let existing = std::fs::read_to_string(path).ok().filter(|t| !t.trim().is_empty());
+    let entries = entries_json(cli, port, typed);
+    let new_text = match &existing {
+        None => format!("{{\n  \"{key}\": {{\n    {entries}\n  }}\n}}\n"),
+        Some(text) => {
+            if text.contains(SERVER) {
+                return Ok(());
+            }
+            let original: serde_json::Value = serde_json::from_str(text).map_err(|_| format!("O arquivo {} não é um JSON simples (tem comentários?), então não mexi nele. Rode Conectar-IA.cmd ou acrescente as entradas à mão.", path.display()))?;
+            let marker = format!("\"{key}\"");
+            let opened = text.find(&marker).and_then(|at| {
+                let after = &text[at + marker.len()..];
+                let colon = after.trim_start().strip_prefix(':')?;
+                let brace = colon.trim_start().strip_prefix('{')?;
+                Some(text.len() - brace.len())
+            });
+            match opened {
+                // Entra logo depois da chave de abertura do bloco, e o resto do arquivo segue igual
+                Some(at) => {
+                    let rest = &text[at..];
+                    let comma = if rest.trim_start().starts_with('}') { "" } else { "," };
+                    format!("{}\n    {entries}{comma}{rest}", &text[..at])
+                }
+                // O arquivo não tem o bloco: entra como chave nova
+                None => {
+                    let mut value = original;
+                    let object = value.as_object_mut().ok_or_else(|| format!("O arquivo {} não é um objeto JSON.", path.display()))?;
+                    let block: serde_json::Value = serde_json::from_str(&format!("{{ {entries} }}")).map_err(|e| e.to_string())?;
+                    object.insert(key.to_string(), block);
+                    serde_json::to_string_pretty(&value).map_err(|e| e.to_string())? + "\n"
+                }
+            }
+        }
+    };
+    // Só grava um arquivo que ainda é JSON e que traz as duas entradas
+    let check: serde_json::Value = serde_json::from_str(&new_text).map_err(|e| format!("Não consegui acrescentar as entradas sem estragar {}: {e}", path.display()))?;
+    if check.get(key).and_then(|b| b.get(SERVER)).is_none() {
+        return Err(format!("Não consegui acrescentar as entradas a {}.", path.display()));
+    }
+    if existing.is_some() {
+        let backup = PathBuf::from(format!("{}.bak-legatia", path.display()));
+        if !backup.exists() {
+            std::fs::copy(path, &backup).map_err(|e| format!("Não consegui guardar a cópia de {}: {e}", path.display()))?;
+        }
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("Não consegui criar {}: {e}", dir.display()))?;
+    }
+    std::fs::write(path, new_text).map_err(|e| format!("Não consegui gravar {}: {e}", path.display()))
+}
+
+/// Liga a IA de janela ao editor, na primeira vez que ela recebe um pedido. O que foi feito, para o painel dizer.
+fn connect(ai: &Ai) -> Result<String, String> {
+    let config = ai.config.as_ref().ok_or_else(|| format!("Não sei onde o {} guarda a configuração de MCP.", ai.name))?;
+    let cli = cli_path().ok_or("Não achei o figcraft-cli.exe ao lado do app. Reinstale o LegatIA Design.")?;
+    let (key, typed) = if ai.name == "VS Code" { ("servers", true) } else { ("mcpServers", false) };
+    add_entries(config, &cli, port(), key, typed)?;
+    let file = config.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    Ok(format!("Liguei o {} ao editor (a configuração antiga ficou guardada em {file}.bak-legatia).", ai.name))
+}
+
 /// Copia o pedido e abre o programa; ele não executa sozinho.
 fn open_and_copy(ctx: &egui::Context, ai: &Ai, text: &str) {
     ctx.copy_text(text.to_string());
@@ -355,9 +442,15 @@ fn open_and_copy(ctx: &egui::Context, ai: &Ai, text: &str) {
         Launch::Exe(exe) => Command::new(exe).spawn().map(|_| ()),
         Launch::Store(app) => Command::new("explorer.exe").arg(app).spawn().map(|_| ()),
     };
-    state().notice = Some(match spawned {
+    let said = match spawned {
         Ok(()) => format!("Pedido copiado. Abri o {}: cole no chat (Ctrl+V) e dê Enter.", ai.name),
         Err(e) => format!("O pedido foi copiado, mas não consegui abrir o {}: {e}", ai.name),
+    };
+    let mut s = state();
+    // Se acabou de ligar a IA ao editor, a primeira frase conta isso
+    s.notice = Some(match s.notice.take() {
+        Some(connected) => format!("{connected} {said} Se ele já estava aberto, feche e abra de novo para ver o editor."),
+        None => said,
     });
 }
 
@@ -547,14 +640,14 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
                     });
                     let ai = ais[s.selected].clone();
                     let hint = if !ai.connected() {
-                        format!("O {} ainda não está ligado ao editor. Rode Conectar-IA.cmd (pasta do app) e reinicie o {}.", ai.name, ai.name)
+                        format!("O {} ainda não está ligado ao editor: o LegatIA Design liga agora, no primeiro envio.", ai.name)
                     } else if ai.runs_alone() {
                         format!("O {} trabalha sozinho no editor aberto e a resposta aparece aqui.", ai.name)
                     } else {
                         format!("Copio o pedido e abro o {}: é só colar (Ctrl+V) e dar Enter.", ai.name)
                     };
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(hint).font(regular(11.0)).color(if ai.connected() { t.text_secondary } else { t.warning }));
+                    ui.label(egui::RichText::new(hint).font(regular(11.0)).color(t.text_secondary));
                     ui.add_space(8.0);
 
                     // A seleção do editor vai no pedido; "Tirar" deixa só o texto.
@@ -601,7 +694,7 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
                         } else {
                             ui.label(egui::RichText::new("Ctrl+Enter envia").font(regular(10.5)).color(t.icon_secondary));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let ready = !s.text.trim().is_empty() && ai.connected();
+                                let ready = !s.text.trim().is_empty();
                                 let b = egui::Button::new(egui::RichText::new("Enviar").font(semibold(11.5)).color(Color32::WHITE))
                                     .corner_radius(CornerRadius::same(14))
                                     .fill(if ready { BLUE } else { t.hover })
@@ -652,6 +745,20 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
         if ai.runs_alone() {
             spawn_run(ctx.clone(), ai, text);
         } else {
+            // A primeira vez: liga a IA ao editor (as entradas da LegatIA na configuração dela) antes de abrir
+            if !ai.connected() {
+                match connect(&ai) {
+                    Ok(done) => state().notice = Some(done),
+                    Err(e) => {
+                        ctx.copy_text(text);
+                        state().notice = Some(format!("{e} O pedido ficou copiado."));
+                        return;
+                    }
+                }
+            }
+            if !channel_open() {
+                state().notice = Some(format!("O canal local do app (porta {}) está fechado, então o {} não alcança o editor. Abra o LegatIA Design pelo atalho do menu Iniciar.", port(), ai.name));
+            }
             open_and_copy(ctx, &ai, &text);
         }
     }
@@ -679,6 +786,77 @@ mod tests {
     #[test]
     fn toml_strings_escape_backslashes_and_quotes() {
         assert_eq!(toml_string(r#"C:\a "b""#), r#""C:\\a \"b\"""#);
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("legatia-agent-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn servers(path: &Path, key: &str) -> Vec<String> {
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        v[key].as_object().unwrap().keys().cloned().collect()
+    }
+
+    #[test]
+    fn connecting_adds_the_two_entries_and_leaves_the_rest_of_the_text_alone() {
+        let dir = temp("add");
+        let file = dir.join("mcp_config.json");
+        let before = "{\n  \"mcpServers\": {\n    \"supabase\": { \"command\": \"npx\", \"args\": [\"-y\", \"x\"], \"env\": { \"TOKEN\": \"segredo\" } }\n  }\n}\n";
+        std::fs::write(&file, before).unwrap();
+        let cli = Path::new("C:\\Users\\x\\LegatIA Design\\figcraft-cli.exe");
+        add_entries(&file, cli, 47800, "mcpServers", false).unwrap();
+        let after = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(servers(&file, "mcpServers"), ["legatia-design", "legatia-design-offline", "supabase"]);
+        // O que já estava continua igual, byte a byte (o trecho do supabase aparece inteiro)
+        assert!(after.contains("\"supabase\": { \"command\": \"npx\", \"args\": [\"-y\", \"x\"], \"env\": { \"TOKEN\": \"segredo\" } }"));
+        assert!(after.contains("figcraft-cli.exe") && after.contains("--attach") && after.contains("47800"));
+        // A cópia do arquivo antigo é igual ao que havia
+        assert_eq!(std::fs::read_to_string(dir.join("mcp_config.json.bak-legatia")).unwrap(), before);
+        // Ligar de novo não duplica nada
+        add_entries(&file, cli, 47800, "mcpServers", false).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), after);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn connecting_handles_an_empty_block_a_missing_block_and_a_new_file() {
+        let dir = temp("shapes");
+        let cli = Path::new("C:/x/figcraft-cli.exe");
+        let empty = dir.join("empty.json");
+        std::fs::write(&empty, "{ \"mcpServers\": {} }").unwrap();
+        add_entries(&empty, cli, 47800, "mcpServers", false).unwrap();
+        assert_eq!(servers(&empty, "mcpServers"), ["legatia-design", "legatia-design-offline"]);
+
+        let other = dir.join("other.json");
+        std::fs::write(&other, "{ \"theme\": \"dark\" }").unwrap();
+        add_entries(&other, cli, 47800, "mcpServers", false).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&other).unwrap()).unwrap();
+        assert_eq!(v["theme"], "dark");
+        assert!(v["mcpServers"]["legatia-design"].is_object());
+
+        let fresh = dir.join("sub").join("novo.json");
+        add_entries(&fresh, cli, 47801, "servers", true).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&fresh).unwrap()).unwrap();
+        assert_eq!(v["servers"]["legatia-design"]["type"], "stdio");
+        assert_eq!(v["servers"]["legatia-design"]["args"][2], "47801");
+        assert!(!dir.join("sub").join("novo.json.bak-legatia").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_file_that_is_not_plain_json_is_left_alone() {
+        let dir = temp("jsonc");
+        let file = dir.join("mcp.json");
+        let text = "{\n  // comentário\n  \"servers\": {}\n}\n";
+        std::fs::write(&file, text).unwrap();
+        let error = add_entries(&file, Path::new("C:/x/figcraft-cli.exe"), 47800, "servers", true).unwrap_err();
+        assert!(error.contains("não mexi"), "{error}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+        assert!(!dir.join("mcp.json.bak-legatia").exists());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

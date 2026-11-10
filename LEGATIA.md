@@ -78,6 +78,14 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   Compartilhar; o botão cinza da barra de abas saiu) e o espaço do orbe, que `legatia/agent.rs` desenha no fim da barra de
   ferramentas. O painel lista as IAs achadas no computador: Claude Code (`claude -p`) e Codex (`codex exec -`) rodam sem janela
   com a ponte MCP indicada na própria chamada e o pedido na entrada padrão; as demais abrem com o pedido copiado.
+- **Home (0.17.2):** `legatia/home.rs` desenha a Home do app do computador (saudação em Satoshi Light em duas vozes, perfil em
+  pílula de vidro, ações, projetos com os arquivos como cartões de vidro, aurora azul), no lugar da do FigCraft (que segue valendo
+  para o navegador). Os dados vêm de `GET /native/overview` do legatia-sync (perfil, projetos e arquivos com estado). Fora da Home:
+  a aba "Online", o código de convite e os "Primeiros passos" não aparecem. Os testes do FigCraft rodam sobre a Home dele
+  (`cfg!(test)`), e a nossa tem os próprios testes em `legatia::home`. A fonte Light vem de `LegatIA-Satoshi-Light.ttf`
+  (`fonts::set_with_light`); sem ela os títulos usam a Regular.
+- **Orbe liga a IA sozinho (0.17.2):** na primeira vez que uma IA de janela recebe um pedido, `agent::connect` acrescenta as duas
+  entradas da LegatIA à configuração de MCP dela (`add_entries`: texto intacto, cópia `.bak-legatia`, só grava JSON válido).
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 

@@ -243,7 +243,7 @@ pub fn new_file_chosen() {
 #[derive(Clone, Default)]
 struct Pictures(HashMap<String, (u64, Option<egui::TextureHandle>)>);
 
-fn picture(ui: &Ui, file: &File) -> Option<egui::TextureHandle> {
+pub(super) fn picture(ui: &Ui, file: &File) -> Option<egui::TextureHandle> {
     if file.thumbnail.is_empty() {
         return None;
     }
@@ -278,10 +278,19 @@ pub fn file_grid(ui: &mut Ui, t: &Tokens, files: &Files) {
         ui.label(egui::RichText::new(said).font(regular(12.0)).color(t.text_secondary));
         return;
     }
+    if let Some(id) = grid(ui, t, &files.items) {
+        emit(json!({"type": "open", "id": id}));
+    }
+}
+
+/// The cards alone (no title, no empty text): the id of the one chosen, if any. The home screen of the desktop app
+/// uses it for the projects' files ([`super::home`]).
+pub fn grid(ui: &mut Ui, t: &Tokens, items: &[File]) -> Option<String> {
+    let mut chosen = None;
     let gap = crate::home_recents::GAP;
     let (columns, card_w) = crate::home_recents::grid_columns(ui.available_width());
     let (picture_h, card_h) = crate::home_recents::card_heights(card_w);
-    for row in files.items.chunks(columns) {
+    for row in items.chunks(columns) {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), card_h), Sense::hover());
         for (i, file) in row.iter().enumerate() {
             let rect = Rect::from_min_size(pos2(r.min.x + i as f32 * (card_w + gap), r.min.y), vec2(card_w, card_h));
@@ -291,11 +300,12 @@ pub fn file_grid(ui: &mut Ui, t: &Tokens, files: &Files) {
                 card(ui, t, rect, picture_h, &resp, file);
             }
             if resp.clicked() {
-                emit(json!({"type": "open", "id": file.id}));
+                chosen = Some(file.id.clone());
             }
         }
         ui.add_space(gap);
     }
+    chosen
 }
 
 fn card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Response, file: &File) {

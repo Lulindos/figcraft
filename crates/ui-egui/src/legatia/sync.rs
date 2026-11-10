@@ -13,7 +13,7 @@ use crate::FigApp;
 
 /// A página do site onde a pessoa liga o app à conta ("App no computador").
 #[cfg(not(target_arch = "wasm32"))]
-const SITE: &str = "https://app.legatia.com.br/dashboard/design";
+pub(crate) const SITE: &str = "https://app.legatia.com.br/dashboard/design";
 
 /// O que o programa respondeu sobre o arquivo aberto.
 #[derive(Clone, Debug, PartialEq)]
@@ -155,6 +155,13 @@ pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = ctx;
+}
+
+/// A Home do app: o corpo de `/native/overview` (quem está conectado e os projetos com os arquivos), ou `None` sem o programa.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn overview_body() -> Option<String> {
+    let token = native::token()?;
+    native::http("GET", "/native/overview", &token, 15)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
