@@ -62,6 +62,12 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   upstream só instala atualização de binário com assinatura digital do mesmo editor, e a nossa build não tem
   certificado. Aqui a garantia é o SHA-256 que o GitHub publica para o asset da nossa release (conferido no
   download). Ao trocar para um app assinado, volte ao crate do craft-libs.
+- **Pasta de instalação e MSI:** o `install.ps1` instala em `%LOCALAPPDATA%\Programs\LegatIA Design`, que é a pasta padrão do MSI do
+  launcher do craft-libs; sem tratamento, o atualizador achava que a cópia era do MSI e pedia um `.msi` (0.15.x e 0.17.0 têm esse erro,
+  só se resolve reinstalando com o zip da 0.17.1 ou mais nova). `vendor/craft-update/src/msi_copy.rs::is_legacy` devolve `false`
+  para o nosso repositório (há teste). **Teste de atualização só vale a partir da pasta instalada de verdade**, não de pasta temporária.
+- **Janela de atualização:** `legatia::update_text` traduz os textos (o crate usa o inglês como chave) e `vendor/craft-update/src/dialog.rs`
+  perde a fonte monoespaçada e os cantos retos; os botões não vão mais em maiúsculas (`translate.rs::button`).
 - Para lançar uma versão: suba `[workspace.package] version` (X.Y.Z, maior que a anterior), compile com
   `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS='-C target-feature=+crt-static'`
   (`cargo build --release --locked -p figcraft -p figcraft-cli --target x86_64-pc-windows-msvc`), rode

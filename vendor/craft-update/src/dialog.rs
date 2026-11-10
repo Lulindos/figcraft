@@ -117,7 +117,7 @@ impl StartupPrompt {
                 egui::Frame::new()
                     .fill(card_bg)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .corner_radius(egui::CornerRadius::ZERO)
+                    .corner_radius(egui::CornerRadius::same(16))
                     .inner_margin(egui::Margin::symmetric(20, 18))
                     .show(ui, |ui| {
                         ui.set_width(400.0);
@@ -133,7 +133,7 @@ impl StartupPrompt {
                             egui::Frame::new()
                                 .fill(alert_bg)
                                 .stroke(egui::Stroke::new(1.0, alert))
-                                .corner_radius(egui::CornerRadius::ZERO)
+                                .corner_radius(egui::CornerRadius::same(9))
                                 .inner_margin(egui::Margin::symmetric(10, 6))
                                 .show(ui, |ui| {
                                     ui.set_width(ui.available_width());
@@ -176,7 +176,7 @@ impl StartupPrompt {
                             // Keyboard focus (Tab, then Enter or Space opens it): the buttons' 2 px ring.
                             if link.has_focus() {
                                 let ring = egui::Stroke::new(2.0, text_primary);
-                                ui.painter().rect_stroke(link.rect.expand(2.0), egui::CornerRadius::ZERO, ring, egui::StrokeKind::Outside);
+                                ui.painter().rect_stroke(link.rect.expand(2.0), egui::CornerRadius::same(9), ring, egui::StrokeKind::Outside);
                             }
                             // `Release`'s fields are public: an app may build one from its own feed or
                             // cache, so the link is checked here too, not only when parsed from GitHub.
@@ -187,8 +187,8 @@ impl StartupPrompt {
 
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if self.is_installing {
-                                    let dismiss_btn = egui::Button::new(RichText::new(button(t, "Dismiss")).size(10.5).monospace().color(text_muted))
-                                        .corner_radius(egui::CornerRadius::ZERO)
+                                    let dismiss_btn = egui::Button::new(RichText::new(button(t, "Dismiss")).size(10.5).color(text_muted))
+                                        .corner_radius(egui::CornerRadius::same(9))
                                         .min_size(Vec2::new(72.0, 26.0));
                                     if ui.add(dismiss_btn).clicked() {
                                         response = StartupPromptResponse::Later;
@@ -197,26 +197,26 @@ impl StartupPrompt {
                                     if self.is_self_updating || self.is_ready {
                                         let label = if self.is_ready { "Restart to Update" } else { "Update and Restart" };
                                         let update_btn =
-                                            egui::Button::new(RichText::new(button(t, label)).size(10.5).strong().monospace().color(on_fill))
+                                            egui::Button::new(RichText::new(button(t, label)).size(10.5).strong().color(on_fill))
                                                 .fill(fill)
-                                                .corner_radius(egui::CornerRadius::ZERO)
+                                                .corner_radius(egui::CornerRadius::same(9))
                                                 .min_size(Vec2::new(140.0, 26.0));
                                         if ui.add(update_btn).clicked() {
                                             response = StartupPromptResponse::UpdateAndRestart;
                                         }
                                     } else {
                                         let dl_btn =
-                                            egui::Button::new(RichText::new(button(t, "Download")).size(10.5).strong().monospace().color(on_fill))
+                                            egui::Button::new(RichText::new(button(t, "Download")).size(10.5).strong().color(on_fill))
                                                 .fill(fill)
-                                                .corner_radius(egui::CornerRadius::ZERO)
+                                                .corner_radius(egui::CornerRadius::same(9))
                                                 .min_size(Vec2::new(90.0, 26.0));
                                         if ui.add(dl_btn).clicked() {
                                             response = StartupPromptResponse::Download;
                                         }
                                     }
 
-                                    let later_btn = egui::Button::new(RichText::new(button(t, "Later")).size(10.5).monospace().color(text_primary))
-                                        .corner_radius(egui::CornerRadius::ZERO)
+                                    let later_btn = egui::Button::new(RichText::new(button(t, "Later")).size(10.5).color(text_primary))
+                                        .corner_radius(egui::CornerRadius::same(9))
                                         .min_size(Vec2::new(65.0, 26.0));
                                     if ui.add(later_btn).clicked() {
                                         response = StartupPromptResponse::Later;
@@ -313,7 +313,7 @@ fn card_header(ui: &mut egui::Ui, app: &App, pal: &Palette, t: Translate, update
             let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
             ui.painter().image(icon.id(), badge_rect, uv, Color32::WHITE);
         } else {
-            ui.painter().rect_filled(badge_rect, egui::CornerRadius::ZERO, fill);
+            ui.painter().rect_filled(badge_rect, egui::CornerRadius::same(9), fill);
             let initial = app.name.chars().next().map(|c| c.to_string()).unwrap_or_else(|| "A".to_string());
             ui.painter().text(badge_rect.center(), Align2::CENTER_CENTER, initial, egui::FontId::monospace(18.0), on_fill);
         }
@@ -328,14 +328,14 @@ fn card_header(ui: &mut egui::Ui, app: &App, pal: &Palette, t: Translate, update
                 if update_pill {
                     // A chip, not accent-coloured text: small accent text misses WCAG's 4.5:1 for
                     // several apps (PdfCraft's red on the dark card, amber on the light one).
-                    egui::Frame::new().fill(fill).inner_margin(egui::Margin::symmetric(4, 1)).show(ui, |ui| {
-                        ui.label(RichText::new(button(t, "Update")).size(10.0).monospace().color(on_fill));
+                    egui::Frame::new().fill(fill).corner_radius(egui::CornerRadius::same(5)).inner_margin(egui::Margin::symmetric(6, 1)).show(ui, |ui| {
+                        ui.label(RichText::new(button(t, "Update")).size(10.0).color(on_fill));
                     });
                 }
             });
             // ASCII only, like the rest of the card: an app whose fonts lack a glyph may panic
             // instead of drawing a box, and the startup prompt shows up unasked.
-            ui.label(RichText::new(second_line).size(11.0).monospace().color(text_muted));
+            ui.label(RichText::new(second_line).size(11.0).color(text_muted));
         });
 
         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
@@ -424,7 +424,7 @@ impl CheckResultDialog {
                 egui::Frame::new()
                     .fill(card_bg)
                     .stroke(egui::Stroke::new(1.0, border_color))
-                    .corner_radius(egui::CornerRadius::ZERO)
+                    .corner_radius(egui::CornerRadius::same(16))
                     .inner_margin(egui::Margin::symmetric(20, 18))
                     .show(ui, |ui| {
                         ui.set_width(400.0);
@@ -496,16 +496,16 @@ impl CheckResultDialog {
                             ui.add_space(8.0);
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 ui.set_min_height(26.0);
-                                let ok = egui::Button::new(RichText::new(button(t, "OK")).size(10.5).strong().monospace().color(on_fill))
+                                let ok = egui::Button::new(RichText::new(button(t, "OK")).size(10.5).strong().color(on_fill))
                                     .fill(fill)
-                                    .corner_radius(egui::CornerRadius::ZERO)
+                                    .corner_radius(egui::CornerRadius::same(9))
                                     .min_size(Vec2::new(65.0, 26.0));
                                 if ui.add(ok).clicked() {
                                     response = CheckResultResponse::Close;
                                 }
                                 if matches!(status, Status::Failed(_) | Status::InstallFailed(_)) {
-                                    let again = egui::Button::new(RichText::new(button(t, "Check Again")).size(10.5).monospace().color(text_primary))
-                                        .corner_radius(egui::CornerRadius::ZERO)
+                                    let again = egui::Button::new(RichText::new(button(t, "Check Again")).size(10.5).color(text_primary))
+                                        .corner_radius(egui::CornerRadius::same(9))
                                         .min_size(Vec2::new(100.0, 26.0));
                                     if ui.add(again).clicked() {
                                         response = CheckResultResponse::CheckAgain;
@@ -513,8 +513,8 @@ impl CheckResultDialog {
                                 }
                                 if matches!(status, Status::Ready) {
                                     let restart =
-                                        egui::Button::new(RichText::new(button(t, "Restart to Update")).size(10.5).monospace().color(text_primary))
-                                            .corner_radius(egui::CornerRadius::ZERO)
+                                        egui::Button::new(RichText::new(button(t, "Restart to Update")).size(10.5).color(text_primary))
+                                            .corner_radius(egui::CornerRadius::same(9))
                                             .min_size(Vec2::new(130.0, 26.0));
                                     if ui.add(restart).clicked() {
                                         response = CheckResultResponse::RestartToUpdate;

@@ -32,7 +32,7 @@ impl Default for Runtime {
     fn default() -> Self {
         Self {
             #[cfg(not(target_arch = "wasm32"))]
-            updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")),
+            updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).with_translator(crate::legatia::update_text),
             #[cfg(not(target_arch = "wasm32"))]
             startup_check: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -114,7 +114,7 @@ pub(crate) fn show(app: &mut FigApp, ctx: &egui::Context) {
         }
         let rt = &mut app.updates_rt;
         if result_window_shows(rt.updater.status(), rt.updater.prompt_open()) {
-            match CheckResultDialog::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).show(ctx, rt.updater.status()) {
+            match CheckResultDialog::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).with_translator(crate::legatia::update_text).show(ctx, rt.updater.status()) {
                 CheckResultResponse::None => {}
                 CheckResultResponse::Close => rt.updater.dismiss_status(),
                 CheckResultResponse::CheckAgain => rt.check_requested = true,

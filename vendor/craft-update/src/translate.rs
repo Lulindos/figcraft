@@ -82,7 +82,7 @@ impl Note {
 /// draws its buttons.
 #[cfg(any(feature = "egui", test))]
 pub(crate) fn button(translate: Translate, label: &str) -> String {
-    translate(label, &[]).to_uppercase()
+    translate(label, &[]) // LegatIA: sentence case, not capitals
 }
 
 #[cfg(test)]

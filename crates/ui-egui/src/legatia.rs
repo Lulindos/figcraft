@@ -164,3 +164,43 @@ pub fn active_icon(t: &Tokens) -> Color32 {
 
 /// What the left rail grows by: its gap from the window edge ([`panel_frame`]), so its labels keep their room.
 pub const RAIL_GAP: f32 = PANEL_GAP as f32;
+
+/// The words of the update windows (`craft-update` keeps them in English, and the English text is
+/// the key) in Portuguese. A text it does not know stays as the crate wrote it.
+pub fn update_text(text: &str, args: &[(&str, &str)]) -> String {
+    let pt = match text {
+        "Update" => "Nova versão",
+        "Update and Restart" => "Atualizar e reiniciar",
+        "Restart to Update" => "Reiniciar para atualizar",
+        "Check Again" => "Verificar de novo",
+        "Dismiss" => "Dispensar",
+        "Download" => "Baixar",
+        "Later" => "Depois",
+        "OK" => "OK",
+        "Close" => "Fechar",
+        "What's new" => "Novidades",
+        "by {developer}" => "por {developer}",
+        "v{from} to {to}" => "v{from} para {to}",
+        "Checking for updates…" => "Procurando atualizações…",
+        "Installing update…" => "Instalando a atualização…",
+        "Downloading and installing update…" => "Baixando e instalando a atualização…",
+        "Could not check for updates." => "Não consegui procurar atualizações.",
+        "All releases are listed at {url}" => "Todas as versões estão em {url}",
+        "{app} updated to {version}." => "{app} atualizado para a versão {version}.",
+        "{app} {version} is the newest version available." => "{app} {version} é a versão mais recente.",
+        "{app} {version} is available with the latest features and bug fixes." => "A versão {version} do {app} está disponível, com novidades e correções.",
+        "{app} {version} follows the version chosen in the launcher, so it does not update itself." => {
+            "{app} {version} segue a versão escolhida no iniciador, então não se atualiza sozinho."
+        }
+        "Update ready. Close {app} to install it." => "Atualização pronta. Feche o {app} para instalar.",
+        "The update could not be installed: {reason}" => "Não deu para instalar a atualização: {reason}",
+        "The update failed unexpectedly." => "A atualização falhou de forma inesperada.",
+        "The update stopped unexpectedly." => "A atualização parou de forma inesperada.",
+        "Couldn't start the update ({error})" => "Não consegui iniciar a atualização ({error})",
+        "Close {app}" => "Feche o {app}",
+        "Save or close your open work first; the update restarts the app." => "Salve ou feche o trabalho aberto antes: a atualização reinicia o app.",
+        "Cannot auto-update this installation type. Please download manually." => "Esta instalação não se atualiza sozinha. Baixe a versão nova pelo site.",
+        other => other,
+    };
+    craft_update::translate::fill(pt, args)
+}

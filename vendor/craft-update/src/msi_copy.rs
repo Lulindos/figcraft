@@ -202,10 +202,33 @@ pub(crate) mod windows {
     /// The launcher's own per-user MSI: the folder its wizard records in HKCU, or its default
     /// `%LOCALAPPDATA%\Programs\<App Name>`.
     fn is_legacy(app: &App, exe: &Path) -> bool {
+        // LegatIA: `install.ps1` puts the app in `%LOCALAPPDATA%\Programs\LegatIA Design`, the very
+        // folder the launcher's MSI uses. Our copy is never an MSI one, and judging it by the folder
+        // made the update ask for a `.msi` this fork does not publish.
+        if app.repo == "Lulindos/figcraft" {
+            return false;
+        }
         let Some(dir) = exe.parent() else { return false };
         let recorded = recorded_dir(app).map(|d| canonical(&d));
         let default = crate::folders::data_local_dir().map(|d| canonical(&d.join("Programs").join(app.name)));
         [recorded, default].into_iter().flatten().any(|d| d == dir)
+    }
+
+    #[cfg(test)]
+    mod legatia_tests {
+        use super::*;
+
+        /// The folder `install.ps1` uses is the launcher's MSI default: our copy must not count as an MSI one
+        /// (the update then asked for a `.msi` this fork never publishes).
+        #[test]
+        fn our_default_folder_is_not_an_msi_copy() {
+            let ours = App { repo: "Lulindos/figcraft", name: "LegatIA Design", ..crate::suite::FIGCRAFT };
+            let exe = crate::folders::data_local_dir().unwrap().join("Programs").join("LegatIA Design").join("figcraft.exe");
+            assert!(!is_legacy(&ours, &exe));
+            // Another app of the suite keeps the rule.
+            let theirs = App { name: "LegatIA Design", ..crate::suite::FIGCRAFT };
+            assert!(is_legacy(&theirs, &exe));
+        }
     }
 
     /// The install folder the launcher's per-user wizard records in HKCU, when it recorded one.
