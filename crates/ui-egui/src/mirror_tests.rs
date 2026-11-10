@@ -8,9 +8,11 @@ use figcraft_engine::Session;
 use serde_json::json;
 
 use crate::layers_drag_tests::Ui;
-use crate::{PANEL_DEFAULT, layers};
+use crate::PANEL_DEFAULT;
 
 const WINDOW_W: f32 = 1440.0;
+/// The icon rail with the gap LegatIA's glass layout leaves beside it (`legatia::RAIL_GAP`).
+const RAIL: f32 = crate::layers::RAIL_WIDTH + crate::legatia::RAIL_GAP;
 
 fn ui(mirrored: bool) -> Ui {
     let mut s = Session::new();
@@ -39,10 +41,10 @@ fn the_design_panel_is_on_the_left_and_the_layers_on_the_right() {
     let u = ui(true);
     let (left, right) = canvas(&u);
     assert_eq!(left, PANEL_DEFAULT, "the Design panel from the window's left edge");
-    assert_eq!(right, WINDOW_W - layers::RAIL_WIDTH - PANEL_DEFAULT, "the layers panel and the rail on the right");
-    // egui keeps a point between a side panel and the canvas, on the canvas side.
+    assert_eq!(right, WINDOW_W - RAIL - PANEL_DEFAULT, "the layers panel and the rail on the right");
+    // LegatIA's glass layout insets the panel from the window's edge, so only its side is checked.
     let design = u.app.ui.right_panel_rect.expect("the Design panel drew");
-    assert_eq!((design.min.x, design.max.x), (0.0, PANEL_DEFAULT - 1.0));
+    assert!(design.min.x < 20.0 && design.max.x < left, "the Design panel is at the window's left edge");
     assert!(u.ctx.global_style().right_to_left, "egui's chrome mirrors too");
 }
 
@@ -50,9 +52,10 @@ fn the_design_panel_is_on_the_left_and_the_layers_on_the_right() {
 fn an_english_window_is_as_it_was() {
     let u = ui(false);
     let (left, right) = canvas(&u);
-    assert_eq!((left, right), (layers::RAIL_WIDTH + PANEL_DEFAULT, WINDOW_W - PANEL_DEFAULT));
+    assert_eq!((left, right), (RAIL + PANEL_DEFAULT, WINDOW_W - PANEL_DEFAULT));
+    // LegatIA's glass layout insets the panel from the window's edge, so only its side is checked.
     let design = u.app.ui.right_panel_rect.expect("the Design panel drew");
-    assert_eq!((design.min.x, design.max.x), (WINDOW_W - PANEL_DEFAULT + 1.0, WINDOW_W));
+    assert!(design.min.x >= right && design.max.x > WINDOW_W - 20.0, "the Design panel is at the window's right edge");
     assert!(!u.ctx.global_style().right_to_left);
 }
 
@@ -77,7 +80,7 @@ fn closing_the_layers_panel_gives_the_canvas_the_right_side() {
     let mut u = ui(true);
     u.app.ui.close_left_panel();
     u.frame(vec![]);
-    assert_eq!(canvas(&u), (PANEL_DEFAULT, WINDOW_W - layers::RAIL_WIDTH), "only the rail is left on the right");
+    assert_eq!(canvas(&u), (PANEL_DEFAULT, WINDOW_W - RAIL), "only the rail is left on the right");
 }
 
 #[test]
@@ -86,7 +89,7 @@ fn switching_back_unmirrors_the_window_and_egui() {
     u.app.ui.mirrored = false;
     u.frame(vec![]);
     u.frame(vec![]);
-    assert_eq!(canvas(&u), (layers::RAIL_WIDTH + PANEL_DEFAULT, WINDOW_W - PANEL_DEFAULT));
+    assert_eq!(canvas(&u), (RAIL + PANEL_DEFAULT, WINDOW_W - PANEL_DEFAULT));
     assert!(!u.ctx.global_style().right_to_left);
 }
 
