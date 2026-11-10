@@ -157,6 +157,13 @@ pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
     let _ = ctx;
 }
 
+/// A foto de perfil de quem está conectado (os bytes da imagem), ou `None` sem o programa ou sem foto.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn avatar_bytes() -> Option<Vec<u8>> {
+    let token = native::token()?;
+    native::http_bytes("GET", "/native/avatar", &token, 20)
+}
+
 /// A Home do app: o corpo de `/native/overview` (quem está conectado e os projetos com os arquivos), ou `None` sem o programa.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn overview_body() -> Option<String> {
@@ -254,6 +261,22 @@ mod native {
         stream.read_to_string(&mut raw).ok()?;
         let (head, body) = raw.split_once("\r\n\r\n")?;
         head.starts_with("HTTP/1.1 200").then(|| body.to_string())
+    }
+
+    /// Como [`http`], mas devolve o corpo como bytes (uma imagem não é texto).
+    pub fn http_bytes(method: &str, target: &str, token: &str, read_secs: u64) -> Option<Vec<u8>> {
+        let port = port();
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(400)).ok()?;
+        stream.set_read_timeout(Some(Duration::from_secs(read_secs))).ok()?;
+        stream.set_write_timeout(Some(Duration::from_secs(3))).ok()?;
+        let request = format!("{method} {target} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-Legatia-Native: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        stream.write_all(request.as_bytes()).ok()?;
+        let mut raw = Vec::new();
+        stream.read_to_end(&mut raw).ok()?;
+        let split = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+        let head = std::str::from_utf8(&raw[..split]).ok()?;
+        head.starts_with("HTTP/1.1 200").then(|| raw[split + 4..].to_vec())
     }
 
     pub fn parse(body: &str) -> Option<Reply> {

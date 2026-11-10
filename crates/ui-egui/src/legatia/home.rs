@@ -77,11 +77,15 @@ struct Shared {
     checked: bool,
     /// Miniaturas (PNG em base64) por caminho no disco, com a data do arquivo de onde vieram.
     thumbs: HashMap<String, (u128, Option<String>)>,
+    /// A foto de perfil já decodificada, e a hora em que foi buscada (de novo a cada 30 min).
+    avatar: Option<egui::ColorImage>,
+    avatar_at: Option<std::time::Instant>,
+    avatar_texture: Option<egui::TextureHandle>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     started: bool,
 }
 
-static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { overview: None, checked: false, thumbs: HashMap::new(), started: false }));
+static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { overview: None, checked: false, thumbs: HashMap::new(), avatar: None, avatar_at: None, avatar_texture: None, started: false }));
 
 fn shared() -> MutexGuard<'static, Shared> {
     SHARED.lock().unwrap_or_else(|e| e.into_inner())
@@ -212,6 +216,9 @@ fn ensure_started(ctx: &egui::Context) {
                 if load_thumbnails(&overview) {
                     ctx.request_repaint();
                 }
+                if overview.state == "ok" && load_avatar() {
+                    ctx.request_repaint();
+                }
             }
             std::thread::sleep(std::time::Duration::from_secs(5));
         }
@@ -220,6 +227,36 @@ fn ensure_started(ctx: &egui::Context) {
 
 #[cfg(target_arch = "wasm32")]
 fn ensure_started(_ctx: &egui::Context) {}
+
+/// Busca a foto de perfil no programa (uma vez, e de novo a cada 30 minutos) e a decodifica. True quando ela mudou.
+#[cfg(not(target_arch = "wasm32"))]
+fn load_avatar() -> bool {
+    {
+        let s = shared();
+        if s.avatar_at.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(30 * 60)) {
+            return false;
+        }
+    }
+    let image = super::sync::avatar_bytes().and_then(|bytes| figcraft_format::thumbnail::decode_thumbnail(&bytes, 160)).map(|p| egui::ColorImage::from_rgba_unmultiplied([p.width as usize, p.height as usize], &p.rgba));
+    let mut s = shared();
+    s.avatar_at = Some(std::time::Instant::now());
+    let changed = s.avatar.as_ref().map(|i| (i.size, i.pixels.len())) != image.as_ref().map(|i| (i.size, i.pixels.len()));
+    if changed {
+        s.avatar_texture = None;
+    }
+    s.avatar = image;
+    changed
+}
+
+/// A foto de perfil como textura (criada na primeira vez que se desenha), com o recorte quadrado do centro.
+fn avatar_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
+    let mut s = shared();
+    if s.avatar_texture.is_none() {
+        let image = s.avatar.clone()?;
+        s.avatar_texture = Some(ctx.load_texture("legatia-avatar", image, egui::TextureOptions::LINEAR));
+    }
+    s.avatar_texture.clone()
+}
 
 /// Tira a miniatura de cada arquivo baixado que ainda não tem uma (ou que mudou). True quando achou alguma nova.
 #[cfg(not(target_arch = "wasm32"))]
@@ -410,9 +447,21 @@ fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now
         glass(ui, t, pill, 22.0, resp.hovered());
         let badge = Rect::from_center_size(pos2(pill.min.x + 24.0, pill.center().y), vec2(30.0, 30.0));
         let p = ui.painter();
-        p.circle_filled(badge.center(), 15.0, t.accent);
-        p.circle_filled(badge.center() + vec2(0.0, -4.0), 12.0, Color32::from_white_alpha(22));
-        p.text(badge.center(), Align2::CENTER_CENTER, initial(&o.user.name), semibold(13.0), t.accent_on);
+        match avatar_texture(ui.ctx()) {
+            Some(texture) => {
+                // A foto, recortada em quadrado pelo centro e arredondada
+                let size = texture.size_vec2();
+                let side = size.x.min(size.y).max(1.0);
+                let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(side / size.x.max(1.0), side / size.y.max(1.0)));
+                egui::Image::from_texture(egui::load::SizedTexture::new(texture.id(), vec2(30.0, 30.0))).uv(uv).corner_radius(CornerRadius::same(15)).paint_at(ui, badge);
+                p.circle_stroke(badge.center(), 15.0, Stroke::new(1.0, Color32::from_white_alpha(40)));
+            }
+            None => {
+                p.circle_filled(badge.center(), 15.0, t.accent);
+                p.circle_filled(badge.center() + vec2(0.0, -4.0), 12.0, Color32::from_white_alpha(22));
+                p.text(badge.center(), Align2::CENTER_CENTER, initial(&o.user.name), semibold(13.0), t.accent_on);
+            }
+        }
         let room = pill_w - 52.0 - 34.0;
         p.text(pos2(pill.min.x + 48.0, pill.center().y - 7.0), Align2::LEFT_CENTER, line(ui, &o.user.name, room, semibold(12.5)), semibold(12.5), t.text);
         p.text(pos2(pill.min.x + 48.0, pill.center().y + 9.0), Align2::LEFT_CENTER, line(ui, &o.user.email, room, regular(10.5)), regular(10.5), t.text_secondary);
