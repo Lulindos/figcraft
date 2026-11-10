@@ -91,6 +91,13 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   com `file.saveAs` e manda `sync-now`; quem cria o arquivo na nuvem é o legatia-sync (createNew). A pasta de cada projeto vem do
   `/native/overview` (`folder`, a mesma `sanitizeName`); `sanitize_name` em Rust espelha a do programa. Os "Outros projetos" da Home são
   clicáveis (`prefer_project`).
+- **Sem conexão (0.17.3):** o legatia-sync testa a conexão a cada ciclo (`reachable`, um HEAD de 3 s no `url` do config) e diz `online` em
+  `/native/status` e `/native/overview`; sem conexão ele não mexe na rede, o que se salva fica `pending` na pasta e sobe quando ela volta.
+  Guarda a última lista em `overview-cache.json` (na pasta de estado) para a Home abrir sem internet. No app, `sync::primary` troca os textos
+  ("Salvar neste PC", "Aguardando rede"), o quadro de salvar e a Home avisam, e `sync::offline()` evita mandar enviar.
+- **Luz do topo da Home (0.17.3):** `legatia/aurora.rs` porta a Aurora do dashboard (shader simplex, três cores por horário), o campo ASCII por
+  cima (rampa, ondas, mistura overlay somada com alfa 0) e o degradê para o fundo, como `Aurora.tsx`, `AsciiField.tsx` e `app/dashboard/page.tsx`
+  do site. 15 quadros por segundo; um quadro só com "reduzir movimento".
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 

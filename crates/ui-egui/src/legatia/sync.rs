@@ -20,6 +20,8 @@ pub(crate) const SITE: &str = "https://app.legatia.com.br/dashboard/design";
 pub struct Reply {
     pub state: String,
     pub detail: String,
+    /// O programa alcança a nuvem agora? Sem conexão o app salva neste PC e o programa envia quando ela voltar.
+    pub online: bool,
 }
 
 /// O botão primário (no lugar do "Compartilhar", como o "Salvar na LegatIA" do site): o que ele diz e o que um clique faz.
@@ -54,6 +56,19 @@ pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
     let p = |id: &'static str, label: &str, tip: &str, busy: bool, disabled: bool| Primary { id, label: label.to_string(), tip: tip.to_string(), busy, disabled };
     if reply.state == "unpaired" {
         return p("connect", "Conectar à LegatIA", "Abre a página Design do site: clique em “App no computador” para ligar este app à sua conta.", false, false);
+    }
+    // Sem conexão: salvar é salvar neste PC, e o que já foi salvo espera a conexão (o programa envia sozinho quando ela voltar)
+    if !reply.online {
+        let waiting = "Salvo neste PC. Vai para a LegatIA assim que a conexão voltar.";
+        if !has_path || reply.state == "outside" {
+            return p("save", "Salvar neste PC", "Sem conexão: o arquivo fica salvo na pasta da LegatIA neste PC e vai para a nuvem quando a conexão voltar.", false, false);
+        }
+        if dirty {
+            return p("save", "Salvar neste PC", "Sem conexão: salva aqui e envia para a LegatIA quando a conexão voltar.", false, false);
+        }
+        if matches!(reply.state.as_str(), "pending" | "new" | "uploading") {
+            return p("", "Aguardando rede", waiting, false, true);
+        }
     }
     if !has_path {
         return p("save", "Salvar na LegatIA", "Salve o arquivo dentro da pasta LegatIA Design para ele ir para a nuvem.", false, false);
@@ -155,10 +170,20 @@ pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
     app.save();
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(path) = active_path(app) {
-        send_now(path, ctx);
+        if offline() {
+            // Sem conexão não há o que enviar agora: fica salvo aqui e o programa envia quando ela voltar
+            app.toast("Sem conexão: salvo neste PC. Vai para a LegatIA quando a conexão voltar.");
+        } else {
+            send_now(path, ctx);
+        }
     }
     #[cfg(target_arch = "wasm32")]
     let _ = ctx;
+}
+
+/// O programa respondeu que está sem conexão com a nuvem (e a conta já estava ligada).
+pub fn offline() -> bool {
+    shared().reply.as_ref().is_some_and(|r| !r.online && r.state != "unpaired")
 }
 
 /// Manda o programa enviar este arquivo agora, sem esperar a próxima verificação.
@@ -297,7 +322,12 @@ mod native {
 
     pub fn parse(body: &str) -> Option<Reply> {
         let v: serde_json::Value = serde_json::from_str(body).ok()?;
-        Some(Reply { state: v.get("state")?.as_str()?.to_string(), detail: v.get("detail").and_then(|d| d.as_str()).unwrap_or("").to_string() })
+        Some(Reply {
+            state: v.get("state")?.as_str()?.to_string(),
+            detail: v.get("detail").and_then(|d| d.as_str()).unwrap_or("").to_string(),
+            // Um programa antigo não diz: vale como com conexão
+            online: v.get("online").and_then(|o| o.as_bool()).unwrap_or(true),
+        })
     }
 
     pub fn poll(path: Option<&str>) -> Option<Reply> {
@@ -316,8 +346,9 @@ mod native {
 
         #[test]
         fn parses_the_programs_answer() {
-            assert_eq!(parse(r#"{"email":"a@b","state":"synced","detail":"versão 4"}"#), Some(Reply { state: "synced".into(), detail: "versão 4".into() }));
-            assert_eq!(parse(r#"{"state":"pending"}"#), Some(Reply { state: "pending".into(), detail: String::new() }));
+            assert_eq!(parse(r#"{"email":"a@b","state":"synced","detail":"versão 4"}"#), Some(Reply { state: "synced".into(), detail: "versão 4".into(), online: true }));
+            assert_eq!(parse(r#"{"state":"pending"}"#), Some(Reply { state: "pending".into(), detail: String::new(), online: true }));
+            assert_eq!(parse(r#"{"state":"pending","online":false}"#).map(|r| r.online), Some(false));
             assert_eq!(parse("não é json"), None);
             assert_eq!(parse(r#"{"detail":"x"}"#), None);
         }
@@ -329,7 +360,11 @@ mod tests {
     use super::*;
 
     fn reply(state: &str, detail: &str) -> Reply {
-        Reply { state: state.into(), detail: detail.into() }
+        Reply { state: state.into(), detail: detail.into(), online: true }
+    }
+
+    fn offline(state: &str) -> Reply {
+        Reply { state: state.into(), detail: String::new(), online: false }
     }
 
     #[test]
@@ -352,6 +387,26 @@ mod tests {
         assert_eq!(primary(&reply("pending", ""), false, true).label, "Enviar à LegatIA");
         assert_eq!(primary(&reply("new", ""), false, true).label, "Novo · enviar");
         assert_eq!(primary(&reply("pending", ""), false, true).id, "save");
+    }
+
+    #[test]
+    fn without_a_connection_saving_is_saving_on_this_pc_and_the_rest_waits() {
+        // Alteração ainda não salva: o botão salva neste PC
+        let p = primary(&offline("synced"), true, true);
+        assert_eq!((p.id, p.label.as_str(), p.disabled), ("save", "Salvar neste PC", false));
+        // Arquivo novo ou fora da pasta: o quadro de projeto e nome, que também diz "neste PC"
+        assert_eq!(primary(&offline("none"), true, false).label, "Salvar neste PC");
+        assert_eq!(primary(&offline("outside"), false, true).label, "Salvar neste PC");
+        // Já salvo no disco e ainda não enviado: aguarda a conexão (nada a clicar)
+        for state in ["pending", "new", "uploading"] {
+            let p = primary(&offline(state), false, true);
+            assert_eq!((p.id, p.label.as_str(), p.disabled), ("", "Aguardando rede", true), "{state}");
+        }
+        // O que já está igual à nuvem continua dizendo isso, e sem conta ligada o botão é o de conectar
+        assert_eq!(primary(&offline("synced"), false, true).label, "Salvo na LegatIA");
+        assert_eq!(primary(&offline("unpaired"), false, true).id, "connect");
+        // Com conexão nada muda
+        assert_eq!(primary(&reply("pending", ""), false, true).label, "Enviar à LegatIA");
     }
 
     #[test]

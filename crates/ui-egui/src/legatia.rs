@@ -15,6 +15,8 @@ use crate::theme::Tokens;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod agent;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod aurora;
 pub mod fonts;
 pub mod glass;
 #[cfg(not(target_arch = "wasm32"))]

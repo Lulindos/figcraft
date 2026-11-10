@@ -1,5 +1,5 @@
 //! LegatIA: a Home do app nativo. Quem está conectado, os projetos da LegatIA com os arquivos de cada um e as ações
-//! de sempre, no padrão da LegatIA: aurora azul ao fundo, saudação em Satoshi Light em duas vozes, vidro líquido com o
+//! de sempre, no padrão da LegatIA: a luz do topo do site (aurora e ASCII) ao fundo, saudação em Satoshi Light em duas vozes, vidro líquido com o
 //! anel do item ativo do menu, sem linhas entre as seções.
 //!
 //! Como o botão de salvar (`sync`), isto não fala com o Supabase: pergunta ao programa `legatia-sync`, em 127.0.0.1
@@ -15,7 +15,7 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use chrono::{DateTime, FixedOffset, Timelike};
 use egui::epaint::PathStroke;
-use egui::{Align2, Color32, CornerRadius, Mesh, Pos2, Rect, Sense, Shape, Stroke, Ui, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, Pos2, Rect, Sense, Shape, Stroke, Ui, pos2, vec2};
 use serde::Deserialize;
 
 use super::host::File;
@@ -60,12 +60,19 @@ pub struct Group {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Overview {
+    /// Há conexão com a nuvem agora? Sem ela a Home mostra o que o programa já tinha e o que se salva espera para subir.
+    #[serde(default = "yes")]
+    pub online: bool,
     /// `ok` ou `unpaired` (o programa roda, mas a conta ainda não foi ligada).
     pub state: String,
     pub user: User,
     /// A pasta `LegatIA Design` do computador.
     pub root: String,
     pub groups: Vec<Group>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 pub fn parse(body: &str) -> Option<Overview> {
@@ -106,6 +113,18 @@ pub fn greeting(now: DateTime<FixedOffset>) -> &'static str {
 
 /// A etiqueta sobre a miniatura (vazia: nada a dizer).
 pub fn badge(file: &FileInfo) -> String {
+    badge_for(file, true)
+}
+
+/// A etiqueta com a conexão em conta: sem ela o que espera para subir "aguarda conexão" e o que não foi baixado "só está na nuvem".
+pub fn badge_for(file: &FileInfo, online: bool) -> String {
+    if !online {
+        match file.state.as_str() {
+            "pending" | "uploading" => return "Aguardando conexão".into(),
+            "cloud" => return "Só na nuvem".into(),
+            _ => {}
+        }
+    }
     match file.state.as_str() {
         "cloud" => "Baixando…".into(),
         "empty" => "Ainda não salvo".into(),
@@ -369,49 +388,9 @@ fn glass(ui: &Ui, t: &Tokens, rect: Rect, radius: f32, hovered: bool) {
     }
 }
 
-/// Um brilho redondo que some nas bordas (gradiente radial), pintado como malha.
-fn glow(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32) {
-    let steps = 56;
-    let mut mesh = Mesh::default();
-    mesh.colored_vertex(center, color);
-    // Dois anéis: o de dentro guarda uma parte da cor, o de fora é transparente (a queda fica suave)
-    let inner = Color32::from_rgba_premultiplied(
-        (color.r() as f32 * 0.38) as u8,
-        (color.g() as f32 * 0.38) as u8,
-        (color.b() as f32 * 0.38) as u8,
-        (color.a() as f32 * 0.38) as u8,
-    );
-    for i in 0..steps {
-        let a = std::f32::consts::TAU * i as f32 / steps as f32;
-        let dir = vec2(a.cos(), a.sin());
-        mesh.colored_vertex(center + dir * radius * 0.5, inner);
-    }
-    for i in 0..steps {
-        let a = std::f32::consts::TAU * i as f32 / steps as f32;
-        let dir = vec2(a.cos(), a.sin());
-        mesh.colored_vertex(center + dir * radius, Color32::TRANSPARENT);
-    }
-    let n = steps as u32;
-    for i in 0..n {
-        let next = (i + 1) % n;
-        mesh.add_triangle(0, 1 + i, 1 + next);
-        mesh.add_triangle(1 + i, 1 + n + i, 1 + n + next);
-        mesh.add_triangle(1 + i, 1 + n + next, 1 + next);
-    }
-    painter.add(Shape::mesh(mesh));
-}
-
-/// A aurora azul atrás do conteúdo (tema escuro): índigo no alto à esquerda, azul e um pouco de ciano para a direita.
-/// Sempre azul: o laranja é cor de ação e não vai ao fundo. Fica parada (não pede quadros).
-pub fn aurora(ui: &Ui, t: &Tokens, area: Rect) {
-    if !t.dark {
-        return;
-    }
-    let painter = ui.painter().with_clip_rect(area);
-    let w = area.width();
-    glow(&painter, pos2(area.min.x + w * 0.16, area.min.y - 30.0), w * 0.62, Color32::from_rgba_unmultiplied(0x0B, 0x3A, 0x8C, 150));
-    glow(&painter, pos2(area.min.x + w * 0.64, area.min.y + 10.0), w * 0.46, Color32::from_rgba_unmultiplied(0x31, 0x6A, 0xFD, 62));
-    glow(&painter, pos2(area.min.x + w * 0.92, area.min.y + 70.0), w * 0.30, Color32::from_rgba_unmultiplied(0x5A, 0xB4, 0xD2, 30));
+/// A luz do topo da Home: a aurora do site com o campo ASCII por cima e o degradê para o fundo (`aurora.rs`). Sempre azul.
+pub fn aurora(ui: &Ui, t: &Tokens, area: Rect, reduce_motion: bool) {
+    super::aurora::paint(ui, t, area, reduce_motion, brasilia_now());
 }
 
 // ---------- a Home ----------
@@ -433,7 +412,10 @@ fn line(ui: &Ui, text: &str, max_w: f32, font: egui::FontId) -> String {
 fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now: DateTime<FixedOffset>) {
     let ok = overview.filter(|o| o.state == "ok");
     let (first, second) = match (ok, overview, checked) {
-        (Some(o), _, _) => (format!("{}, {}.", greeting(now), first_name(&o.user.name)), "Seus projetos da LegatIA, no seu computador.".to_string()),
+        (Some(o), _, _) => (
+            format!("{}, {}.", greeting(now), first_name(&o.user.name)),
+            if o.online { "Seus projetos da LegatIA, no seu computador.".to_string() } else { "Sem conexão: você vê o que está salvo neste PC.".to_string() },
+        ),
         (None, Some(_), _) => ("Bem-vindo ao LegatIA Design.".to_string(), "Ligue o app à sua conta para ver os seus projetos.".to_string()),
         (None, None, false) => ("Bem-vindo ao LegatIA Design.".to_string(), "Buscando os seus projetos…".to_string()),
         (None, None, true) => ("Bem-vindo ao LegatIA Design.".to_string(), "A sincronização com a LegatIA não está rodando neste computador.".to_string()),
@@ -474,9 +456,14 @@ fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now
         p.text(pos2(pill.min.x + 48.0, pill.center().y + 9.0), Align2::LEFT_CENTER, line(ui, &o.user.email, room, regular(10.5)), regular(10.5), t.text_secondary);
         // O ponto azul de "conectado", com um halo
         let dot = pos2(pill.max.x - 18.0, pill.center().y);
-        p.circle_filled(dot, 7.0, Color32::from_rgba_unmultiplied(0x00, 0x6F, 0xFE, 40));
-        p.circle_filled(dot, 3.5, crate::legatia::BLUE_400);
-        resp.on_hover_text(format!("{}\nConectado à LegatIA", o.user.email));
+        if o.online {
+            p.circle_filled(dot, 7.0, Color32::from_rgba_unmultiplied(0x00, 0x6F, 0xFE, 40));
+            p.circle_filled(dot, 3.5, crate::legatia::BLUE_400);
+            resp.on_hover_text(format!("{}\nConectado à LegatIA", o.user.email));
+        } else {
+            p.circle_filled(dot, 3.5, t.text_secondary);
+            resp.on_hover_text(format!("{}\nSem conexão com a LegatIA. O que você salvar aqui vai para a nuvem quando a conexão voltar.", o.user.email));
+        }
     }
 }
 
@@ -674,7 +661,7 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
                 .map(|f| {
                     let path = local_path(&overview.root, &f.rel);
                     let thumbnail = path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default();
-                    (File { id: f.id.clone(), name: f.name.clone(), detail: detail(f, now), badge: badge(f), thumbnail }, needs_attention(f))
+                    (File { id: f.id.clone(), name: f.name.clone(), detail: detail(f, now), badge: badge_for(f, overview.online), thumbnail }, needs_attention(f))
                 })
                 .collect()
         };
@@ -730,12 +717,15 @@ fn project_chips<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&'
 
 /// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo, ou ainda baixando).
 fn open_local(app: &mut FigApp, path: &Path, never_saved: bool) {
+    let offline = current().is_some_and(|o| !o.online);
     if path.is_file() {
         if app.run_user("file.open", serde_json::json!({"path": path.to_string_lossy()})).is_some() {
             app.ui.home = false;
         }
     } else if never_saved {
         app.toast("Este arquivo ainda não tem nenhuma versão salva na LegatIA.");
+    } else if offline {
+        app.toast("Sem conexão: este arquivo ainda não foi baixado para o computador.");
     } else {
         app.toast("O arquivo ainda está sendo baixado para o computador. Tente de novo em alguns segundos.");
     }
@@ -764,7 +754,7 @@ pub fn search(app: &mut FigApp, ui: &mut Ui, t: &Tokens, query: &str) -> usize {
             .map(|(g, f)| {
                 let path = local_path(&overview.root, &f.rel);
                 let thumbnail = path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default();
-                (File { id: f.id.clone(), name: f.name.clone(), detail: format!("{} · {}", g.name, detail(f, now)), badge: badge(f), thumbnail }, needs_attention(f))
+                (File { id: f.id.clone(), name: f.name.clone(), detail: format!("{} · {}", g.name, detail(f, now)), badge: badge_for(f, overview.online), thumbnail }, needs_attention(f))
             })
             .collect()
     };
@@ -904,6 +894,23 @@ mod tests {
         assert_eq!(badge(&locked), "Editando: Maria");
         assert!(needs_attention(&locked) && needs_attention(&file("conflict")) && needs_attention(&file("behind")));
         assert!(!needs_attention(&file("synced")) && !needs_attention(&file("pending")) && !needs_attention(&file("cloud")));
+    }
+
+    #[test]
+    fn without_a_connection_the_tags_wait_for_it() {
+        assert_eq!(badge_for(&file("pending"), false), "Aguardando conexão");
+        assert_eq!(badge_for(&file("uploading"), false), "Aguardando conexão");
+        assert_eq!(badge_for(&file("cloud"), false), "Só na nuvem");
+        assert_eq!(badge_for(&file("synced"), false), "");
+        // Com conexão, as de sempre
+        assert_eq!(badge_for(&file("pending"), true), "Alterado aqui");
+        assert_eq!(badge_for(&file("cloud"), true), "Baixando…");
+    }
+
+    #[test]
+    fn a_program_that_does_not_say_is_online() {
+        assert!(parse(r#"{"state":"ok"}"#).unwrap().online);
+        assert!(!parse(r#"{"state":"ok","online":false}"#).unwrap().online);
     }
 
     #[test]

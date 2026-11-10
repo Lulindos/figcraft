@@ -151,7 +151,13 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
             ui.set_width(440.0);
             ui.label(egui::RichText::new("Salvar na LegatIA").font(semibold(17.0)).color(t.text));
             ui.add_space(4.0);
-            ui.label(egui::RichText::new("Escolha o projeto e o nome. O arquivo vai para a nuvem em seguida.").font(regular(11.5)).color(t.text_secondary));
+            let offline = !overview.online;
+            let subtitle = if offline {
+                "Sem conexão: o arquivo fica salvo neste PC, na pasta do projeto, e vai para a nuvem quando a conexão voltar."
+            } else {
+                "Escolha o projeto e o nome. O arquivo vai para a nuvem em seguida."
+            };
+            ui.label(egui::RichText::new(subtitle).font(regular(11.5)).color(if offline { t.warning } else { t.text_secondary }));
             ui.add_space(16.0);
             ui.label(egui::RichText::new("Nome do arquivo").font(semibold(11.5)).color(t.text_secondary));
             ui.add_space(6.0);
@@ -223,7 +229,7 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
                     action = Some(Action::Elsewhere);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if pill(ui, &t, "Salvar", true, ready) || (enter && ready) {
+                    if pill(ui, &t, if offline { "Salvar neste PC" } else { "Salvar" }, true, ready) || (enter && ready) {
                         action = Some(Action::Save);
                     }
                     if pill(ui, &t, "Cancelar", false, true) {
@@ -277,8 +283,13 @@ fn save(app: &mut FigApp, ctx: &egui::Context, overview: &Overview, choice: &Cho
     if app.run_user("file.saveAs", json!({"path": path.to_string_lossy()})).is_none() {
         return Err("Não consegui salvar o arquivo. Veja o aviso na tela.".into());
     }
-    super::sync::send_now(path.to_string_lossy().into_owned(), ctx);
-    app.toast(format!("Salvo em {}. Enviando para a nuvem…", choice.label));
+    if overview.online {
+        super::sync::send_now(path.to_string_lossy().into_owned(), ctx);
+        app.toast(format!("Salvo em {}. Enviando para a nuvem…", choice.label));
+    } else {
+        // Sem conexão: fica na pasta do projeto e o programa cria o arquivo na nuvem quando ela voltar
+        app.toast(format!("Sem conexão: salvo neste PC, em {}. Vai para a nuvem quando a conexão voltar.", choice.label));
+    }
     Ok(())
 }
 

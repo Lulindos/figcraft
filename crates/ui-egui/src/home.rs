@@ -144,6 +144,9 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
     dropped(app, ui.ctx());
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.panel)).show(ui, |ui| {
         let rect = ui.max_rect();
+        // LegatIA (desktop app): the top light of the site (aurora + ASCII), behind the sidebar and the content
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::legatia::home::aurora(ui, &t, rect, app.reduce_motion());
         let left = Rect::from_min_size(rect.min, vec2(SIDEBAR, rect.height()));
         ui.painter().line_segment([left.right_top(), left.right_bottom()], Stroke::new(1.0, crate::legatia::divider(&t)));
         sidebar(app, ui, &t, left);
@@ -155,9 +158,6 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
             return;
         }
         let main = Rect::from_min_max(pos2(left.max.x, rect.min.y), rect.max);
-        // LegatIA (desktop app): the blue aurora behind the content
-        #[cfg(not(target_arch = "wasm32"))]
-        crate::legatia::home::aurora(ui, &t, main);
         ui.scope_builder(egui::UiBuilder::new().max_rect(main), |ui| {
             egui::ScrollArea::vertical().id_salt("home").auto_shrink([false, false]).show(ui, |ui| {
                 egui::Frame::NONE.inner_margin(egui::Margin::symmetric(40, 24)).show(ui, |ui| {

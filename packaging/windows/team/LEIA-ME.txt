@@ -39,6 +39,11 @@ Num arquivo novo (ou que está fora da pasta LegatIA Design), "Salvar na LegatIA
 projeto e o nome, e o app grava na pasta certa e envia. Na Home, clique num dos "Outros projetos" para começar um
 arquivo já ligado àquele projeto. "Salvar só neste PC..." abre o seletor comum, sem enviar.
 
+SEM INTERNET
+O app trabalha primeiro neste computador. Sem conexão, "Salvar neste PC" grava o arquivo na pasta LegatIA Design (o quadro de
+projeto e nome também funciona) e o botão passa a "Aguardando rede". Quando a conexão volta, o app envia sozinho o que foi
+salvo, e o aviso some. A Home abre sem internet com a última lista de projetos e arquivos que o app viu, e diz "Sem conexão".
+
 SALVAR E O ORBE
 No canto direito do painel, o botão "Salvar na LegatIA" mostra o estado do arquivo aberto (salvo na nuvem, enviando,
 em edição por outra pessoa...) e, ao clicar, salva e envia a versão nova. Ctrl+S faz o mesmo.
