@@ -2,17 +2,18 @@
 //!
 //! O app nativo não fala com o Supabase: o programa `legatia-sync` (tools/legatia-sync, no repositório do site)
 //! espelha os arquivos da conta numa pasta do computador. Este módulo só pergunta a ele, em 127.0.0.1, como está o
-//! arquivo aberto, com o segredo que ele guarda em `%APPDATA%\LegatIA Design\native.token`, e desenha um botão na
-//! barra de abas: o estado, e um clique que salva no disco e manda enviar na hora. Sem o programa rodando, nada
-//! aparece. Nada disto existe no navegador (lá a página hospedeira salva).
+//! arquivo aberto, com o segredo que ele guarda em `%APPDATA%\LegatIA Design\native.token`, e mostra o estado no
+//! botão primário, no lugar do "Compartilhar" (como o "Salvar na LegatIA" do site): o estado, e um clique que salva no
+//! disco e manda enviar na hora. Sem o programa rodando, o botão continua o do FigCraft. Nada disto existe no navegador
+//! (lá a página hospedeira salva).
 
 use std::sync::{Mutex, MutexGuard};
 
-use egui::{CornerRadius, Rect, Sense, Stroke, Ui, pos2, vec2};
-
 use crate::FigApp;
-use crate::a11y::Tip;
-use crate::theme::{Tokens, regular};
+
+/// A página do site onde a pessoa liga o app à conta ("App no computador").
+#[cfg(not(target_arch = "wasm32"))]
+const SITE: &str = "https://app.legatia.com.br/dashboard/design";
 
 /// O que o programa respondeu sobre o arquivo aberto.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,27 +22,21 @@ pub struct Reply {
     pub detail: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Tone {
-    Ok,
-    Busy,
-    Warn,
-    Bad,
-    Quiet,
-}
-
-/// O texto e a cor do botão, e se um clique faz alguma coisa.
+/// O botão primário (no lugar do "Compartilhar", como o "Salvar na LegatIA" do site): o que ele diz e o que um clique faz.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Look {
+pub struct Primary {
+    /// `save` (salva e envia), `connect` (abre o site) ou vazio (só informa).
+    pub id: &'static str,
     pub label: String,
-    pub tone: Tone,
-    pub tip: &'static str,
+    pub tip: String,
+    pub busy: bool,
+    pub disabled: bool,
 }
 
 struct Shared {
     /// O caminho do arquivo aberto agora, que o fio de consulta manda ao programa.
     path: Option<String>,
-    /// `None`: o programa não está rodando (ou o segredo não existe), então o botão não aparece.
+    /// `None`: o programa não está rodando (ou o segredo não existe), então o botão do app fica como o do FigCraft.
     reply: Option<Reply>,
     /// A consulta ao programa só existe no desktop.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -54,83 +49,95 @@ fn shared() -> MutexGuard<'static, Shared> {
     SHARED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// O botão para este arquivo: `dirty` é "tem alteração ainda não salva no disco". Sem resposta do programa, nada.
-pub fn look(reply: &Reply, dirty: bool, has_path: bool) -> Look {
-    let (label, tone, tip): (String, Tone, &'static str) = if reply.state == "unpaired" {
-        ("LegatIA: conectar".into(), Tone::Quiet, "Abra a página Design no site e clique em “App no computador” para ligar este app à sua conta.")
-    } else if !has_path {
-        ("Novo · salvar na LegatIA".into(), Tone::Warn, "Salve o arquivo dentro da pasta LegatIA Design para ele ir para a nuvem.")
-    } else if matches!(reply.state.as_str(), "outside" | "missing" | "none") {
-        ("Só neste computador".into(), Tone::Quiet, "Este arquivo está fora da pasta LegatIA Design e não vai para a nuvem.")
-    } else if dirty {
-        ("Salvar na LegatIA".into(), Tone::Warn, "Salva e envia para a nuvem agora.")
-    } else {
-        match reply.state.as_str() {
-            "uploading" => ("Enviando…".into(), Tone::Busy, "Enviando a versão salva para a nuvem."),
-            "pending" => ("Enviar para a LegatIA".into(), Tone::Warn, "Salvo no disco e ainda não enviado. Clique para enviar agora."),
-            "new" => ("Novo · enviar".into(), Tone::Warn, "Arquivo novo na pasta: clique para criar na nuvem agora."),
-            "locked" => (format!("Em edição por {}", reply.detail), Tone::Bad, "Outra pessoa está editando. O envio acontece quando a trava soltar (até 15 min)."),
-            "conflict" => ("Conflito · veja _conflitos".into(), Tone::Bad, "A nuvem mudou junto: a sua cópia está na pasta _conflitos e este arquivo é o da nuvem."),
-            "behind" => ("Nuvem tem versão mais nova".into(), Tone::Warn, "Feche e abra o arquivo para ver a versão da nuvem."),
-            "synced" => (format!("Na LegatIA · {}", reply.detail), Tone::Ok, "Igual à nuvem. Clique para salvar e enviar de novo."),
-            _ => ("LegatIA".into(), Tone::Quiet, "Estado desconhecido."),
-        }
-    };
-    Look { label, tone, tip }
+/// O botão para este arquivo: `dirty` é "tem alteração ainda não salva no disco".
+pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
+    let p = |id: &'static str, label: &str, tip: &str, busy: bool, disabled: bool| Primary { id, label: label.to_string(), tip: tip.to_string(), busy, disabled };
+    if reply.state == "unpaired" {
+        return p("connect", "Conectar à LegatIA", "Abre a página Design do site: clique em “App no computador” para ligar este app à sua conta.", false, false);
+    }
+    if !has_path {
+        return p("save", "Salvar na LegatIA", "Salve o arquivo dentro da pasta LegatIA Design para ele ir para a nuvem.", false, false);
+    }
+    if matches!(reply.state.as_str(), "outside" | "missing" | "none") {
+        return p("", "Só neste PC", "Este arquivo está fora da pasta LegatIA Design e não vai para a nuvem.", false, true);
+    }
+    if dirty {
+        return p("save", "Salvar na LegatIA", "Salva e envia para a nuvem agora.", false, false);
+    }
+    match reply.state.as_str() {
+        "uploading" => p("", "Enviando…", "Enviando a versão salva para a nuvem.", true, false),
+        "pending" => p("save", "Enviar à LegatIA", "Salvo no disco e ainda não enviado. Clique para enviar agora.", false, false),
+        "new" => p("save", "Novo · enviar", "Arquivo novo na pasta: clique para criar na nuvem agora.", false, false),
+        "locked" => Primary {
+            id: "",
+            label: format!("Editando: {}", short(&reply.detail)),
+            tip: "Outra pessoa está editando. O envio acontece quando a trava soltar (até 15 min).".into(),
+            busy: false,
+            disabled: true,
+        },
+        "conflict" => p("", "Conflito", "A nuvem mudou junto: a sua cópia está na pasta _conflitos e este arquivo é o da nuvem.", false, true),
+        "behind" => p("", "Nuvem mais nova", "Feche e abra o arquivo para ver a versão da nuvem.", false, true),
+        "synced" => Primary { id: "", label: "Salvo na LegatIA".into(), tip: format!("Igual à nuvem · {}.", reply.detail), busy: false, disabled: true },
+        _ => p("", "LegatIA", "Estado desconhecido.", false, true),
+    }
+}
+
+/// O nome de quem está editando, curto para o botão não invadir o resto da barra.
+fn short(name: &str) -> String {
+    let mut out: String = name.chars().take(12).collect();
+    if name.chars().count() > 12 {
+        out.push('…');
+    }
+    out
 }
 
 fn active_path(app: &FigApp) -> Option<String> {
     app.session.docs.get(app.session.active).and_then(|d| d.path.clone())
 }
 
-fn current_look(app: &FigApp) -> Option<Look> {
+fn current_primary(app: &FigApp) -> Option<Primary> {
     let reply = shared().reply.clone()?;
     let ds = app.session.docs.get(app.session.active)?;
-    Some(look(&reply, ds.is_dirty(), ds.path.is_some()))
+    Some(primary(&reply, ds.is_dirty(), ds.path.is_some()))
 }
 
-fn width_of(label: &str) -> f32 {
-    (label.chars().count() as f32 * 6.4 + 34.0).clamp(96.0, 260.0)
-}
-
-/// A largura que o botão toma da barra de abas neste quadro (0 sem o programa); também liga a consulta ao programa.
+/// Liga a consulta ao programa e diz qual é o arquivo aberto. O estado agora aparece no botão primário, não na barra de abas.
 pub fn reserved(app: &FigApp, ctx: &egui::Context) -> f32 {
     ensure_started(ctx);
     shared().path = active_path(app);
-    current_look(app).map_or(0.0, |l| width_of(&l.label) + 8.0)
+    0.0
 }
 
-/// Desenha o botão à esquerda de `left_of` e devolve o retângulo que ele ocupou (ou `left_of`, sem o programa).
-pub fn chip(app: &mut FigApp, ui: &mut Ui, t: &Tokens, left_of: Rect) -> Rect {
-    let Some(look) = current_look(app) else { return left_of };
-    let w = width_of(&look.label);
-    let r = Rect::from_center_size(pos2(left_of.min.x - 8.0 - w / 2.0, left_of.center().y), vec2(w, 24.0));
-    let clickable = look.tone != Tone::Quiet || !look.label.starts_with("Só");
-    let resp = ui.interact(r, ui.scope_id().with("legatia_sync_chip"), if clickable { Sense::click() } else { Sense::hover() });
-    let resp = resp.tip(look.tip);
-    if resp.hovered() && clickable {
-        ui.painter().rect_filled(r, CornerRadius::same(12), t.hover);
+/// A barra de abas não tem mais o botão do estado (ver [`host_frame`]): devolve o retângulo que recebeu.
+pub fn chip(_app: &mut FigApp, _ui: &mut egui::Ui, _t: &crate::theme::Tokens, left_of: egui::Rect) -> egui::Rect {
+    left_of
+}
+
+/// O que o app diz ao `host` a cada quadro: o botão primário (estado do arquivo, no lugar do Compartilhar) e o espaço do orbe
+/// no fim da barra de ferramentas; e o que acontece com os cliques desde o quadro anterior.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
+    for event in super::host::take_events() {
+        if event.get("type").and_then(|t| t.as_str()) != Some("button") {
+            continue;
+        }
+        match event.get("id").and_then(|i| i.as_str()) {
+            Some("save") => save_now(app, ctx),
+            Some("connect") => ctx.open_url(egui::OpenUrl::new_tab(SITE)),
+            _ => {}
+        }
     }
-    ui.painter().rect_stroke(r, CornerRadius::same(12), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-    let dot = match look.tone {
-        Tone::Ok => t.success,
-        Tone::Busy => crate::theme::ACCENT,
-        Tone::Warn => t.warning,
-        Tone::Bad => t.danger,
-        Tone::Quiet => t.icon_secondary,
-    };
-    ui.painter().circle_filled(pos2(r.min.x + 12.0, r.center().y), 3.5, dot);
-    ui.painter().text(
-        pos2(r.min.x + 22.0, r.center().y),
-        egui::Align2::LEFT_CENTER,
-        &look.label,
-        regular(11.5),
-        if resp.hovered() { t.text } else { t.text_secondary },
-    );
-    if resp.clicked() && clickable {
-        save_now(app, ui.ctx());
+    let mut host = serde_json::json!({ "dockSlot": 36.0 });
+    if let Some(p) = current_primary(app) {
+        host["primary"] = serde_json::json!({ "id": p.id, "label": p.label, "tip": p.tip, "busy": p.busy, "disabled": p.disabled });
     }
-    r
+    static LAST: Mutex<String> = Mutex::new(String::new());
+    let text = host.to_string();
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if *last != text {
+        let _ = super::host::set(host);
+        *last = text;
+    }
 }
 
 /// Salva no disco (como Ctrl+S) e manda o programa enviar este arquivo agora, sem esperar a próxima verificação.
@@ -281,47 +288,54 @@ mod tests {
 
     #[test]
     fn a_synced_file_says_so_and_names_the_version() {
-        let l = look(&reply("synced", "versão 4"), false, true);
-        assert_eq!((l.label.as_str(), l.tone), ("Na LegatIA · versão 4", Tone::Ok));
+        let p = primary(&reply("synced", "versão 4"), false, true);
+        assert_eq!((p.label.as_str(), p.disabled), ("Salvo na LegatIA", true));
+        assert!(p.tip.contains("versão 4"));
     }
 
     #[test]
     fn unsaved_changes_ask_to_save_whatever_the_cloud_says() {
         for state in ["synced", "pending", "behind", "uploading"] {
-            let l = look(&reply(state, ""), true, true);
-            assert_eq!((l.label.as_str(), l.tone), ("Salvar na LegatIA", Tone::Warn), "{state}");
+            let p = primary(&reply(state, ""), true, true);
+            assert_eq!((p.id, p.label.as_str(), p.disabled), ("save", "Salvar na LegatIA", false), "{state}");
         }
     }
 
     #[test]
     fn saved_on_disk_but_not_sent_offers_to_send() {
-        assert_eq!(look(&reply("pending", ""), false, true).label, "Enviar para a LegatIA");
-        assert_eq!(look(&reply("new", ""), false, true).label, "Novo · enviar");
+        assert_eq!(primary(&reply("pending", ""), false, true).label, "Enviar à LegatIA");
+        assert_eq!(primary(&reply("new", ""), false, true).label, "Novo · enviar");
+        assert_eq!(primary(&reply("pending", ""), false, true).id, "save");
     }
 
     #[test]
-    fn someone_else_editing_shows_their_name_as_a_problem() {
-        let l = look(&reply("locked", "Maria"), false, true);
-        assert_eq!((l.label.as_str(), l.tone), ("Em edição por Maria", Tone::Bad));
-        assert_eq!(look(&reply("conflict", ""), false, true).tone, Tone::Bad);
+    fn uploading_is_busy_and_not_clickable() {
+        let p = primary(&reply("uploading", ""), false, true);
+        assert!(p.busy && p.id.is_empty());
+    }
+
+    #[test]
+    fn someone_else_editing_shows_their_name_and_blocks() {
+        let p = primary(&reply("locked", "Maria"), false, true);
+        assert_eq!((p.label.as_str(), p.disabled), ("Editando: Maria", true));
+        assert!(primary(&reply("conflict", ""), false, true).disabled);
     }
 
     #[test]
     fn a_file_outside_the_folder_is_quiet_and_a_new_document_asks_to_be_saved_in_it() {
-        assert_eq!(look(&reply("outside", ""), false, true).tone, Tone::Quiet);
-        assert_eq!(look(&reply("none", ""), true, false).label, "Novo · salvar na LegatIA");
+        assert!(primary(&reply("outside", ""), false, true).disabled);
+        let p = primary(&reply("none", ""), true, false);
+        assert_eq!((p.id, p.label.as_str()), ("save", "Salvar na LegatIA"));
+    }
+
+    #[test]
+    fn a_long_name_is_cut_so_the_button_stays_short() {
+        assert_eq!(primary(&reply("locked", "Maria Fernanda Albuquerque"), false, true).label, "Editando: Maria Fernan…");
     }
 
     #[test]
     fn before_pairing_the_button_points_to_the_site() {
-        let l = look(&reply("unpaired", ""), false, true);
-        assert_eq!((l.label.as_str(), l.tone), ("LegatIA: conectar", Tone::Quiet));
-    }
-
-    #[test]
-    fn the_button_grows_with_its_text_within_limits() {
-        assert!(width_of("Enviando…") < width_of("Em edição por Maria Fernanda"));
-        assert_eq!(width_of(""), 96.0);
-        assert_eq!(width_of(&"x".repeat(200)), 260.0);
+        let p = primary(&reply("unpaired", ""), false, true);
+        assert_eq!((p.id, p.label.as_str(), p.disabled), ("connect", "Conectar à LegatIA", false));
     }
 }

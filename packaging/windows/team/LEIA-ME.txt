@@ -29,6 +29,14 @@ de configuração pronto para colar em qualquer IA que use MCP.
 - legatia-design-offline: a IA edita um arquivo sem abrir o app.
 Depois de ligar, reinicie a IA e peça, por exemplo: "use o legatia-design e crie um card azul".
 
+SALVAR E O ORBE
+No canto direito do painel, o botão "Salvar na LegatIA" mostra o estado do arquivo aberto (salvo na nuvem, enviando,
+em edição por outra pessoa...) e, ao clicar, salva e envia a versão nova. Ctrl+S faz o mesmo.
+No fim da barra de ferramentas fica o orbe azul: clique, escolha qual IA do computador vai receber o pedido e escreva o
+que ela deve fazer. Claude Code e Codex trabalham sozinhos e a resposta aparece no painel; as outras (Claude Desktop,
+Antigravity, Windsurf, Cursor, VS Code) abrem com o pedido copiado: cole e dê Enter. Elas precisam ter sido ligadas
+pelo Conectar-IA.cmd.
+
 ATUALIZAR
 O app avisa quando há versão nova. Clique em "Baixar": ele fecha, troca os arquivos e volta sozinho.
 Se algo der errado, extraia o zip mais novo e rode "Instalar.cmd" de novo (feche o app antes).

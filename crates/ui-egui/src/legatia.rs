@@ -13,9 +13,12 @@ use egui::{Color32, CornerRadius, FontId, Frame, Margin, Painter, Pos2, Rect, St
 
 use crate::theme::Tokens;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod agent;
 pub mod fonts;
 pub mod glass;
 pub mod host;
+pub mod strands;
 pub mod sync;
 
 /// The LegatIA blue (#006FFE) and the steps of its scale used by the UI (LegatIA design system).

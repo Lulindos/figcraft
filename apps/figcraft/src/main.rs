@@ -281,6 +281,9 @@ fn main() -> eframe::Result {
     let apple_events = apple_events::AppleEvents::install();
     #[cfg(target_os = "macos")]
     let apple_events = &apple_events;
+    if let Some(p) = port {
+        figcraft_ui_egui::legatia::agent::set_port(p);
+    }
     legatia_sync::start();
     let result = eframe::run_native(
         "FigCraft",

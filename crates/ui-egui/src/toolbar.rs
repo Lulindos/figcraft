@@ -181,6 +181,9 @@ fn main_toolbar(app: &mut FigApp, ui: &mut Ui, canvas: Rect, t: &Tokens, board: 
         mode_switcher(app, ui, x, cy, t);
     }
     crate::legatia::host::dock_slot(ui, t, rect);
+    // LegatIA: o orbe que chama uma IA do computador (no espaço que o host reservou).
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::legatia::agent::orb(app, ui, t);
     ui.set_clip_rect(outer_clip);
     help_button(app, ui, canvas, rect, t);
 }

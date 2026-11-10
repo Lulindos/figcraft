@@ -107,6 +107,8 @@ pub fn tab_bar(app: &mut FigApp, ui: &mut Ui) {
         let buttons_w = if app.ui.title_bar == TitleBar::Custom { window_buttons(app, ui, rect) } else { 0.0 };
         // LegatIA: the sync button (state of the open file, save and send) takes room right of the tabs.
         let sync_w = crate::legatia::sync::reserved(app, ui.ctx());
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::legatia::sync::host_frame(app, ui.ctx());
         let mut x = rect.min.x + if app.ui.title_bar == TitleBar::Inset { 76.0 } else { 8.0 };
         x += home_tab(app, ui, &t, x, rect);
         ui.painter().line_segment([pos2(x, rect.min.y), pos2(x, rect.max.y)], Stroke::new(1.0, t.border));

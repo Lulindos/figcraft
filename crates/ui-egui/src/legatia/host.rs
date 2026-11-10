@@ -161,7 +161,9 @@ const CTA_GLOW: Color32 = Color32::from_rgb(0xFF, 0x70, 0x37);
 /// its rect, or `None` without one (Share is drawn).
 pub fn primary_button(ui: &mut Ui, t: &Tokens, top: Rect) -> Option<Rect> {
     let b = get()?.primary.clone()?;
-    let label = ui.painter().layout_no_wrap(b.label.clone(), semibold(11.5), Color32::BLACK);
+    // The ink is chosen before the label is laid out: a galley keeps the colour it was laid out with.
+    let ink = if b.disabled { t.text_secondary } else if b.busy { Color32::from_gray(70) } else { Color32::BLACK };
+    let label = ui.painter().layout_no_wrap(b.label.clone(), semibold(11.5), ink);
     let w = (label.size().x + 28.0).max(64.0);
     let r = Rect::from_min_size(pos2(top.max.x - 14.0 - w, top.center().y - 15.0), vec2(w, 30.0));
     let idle = b.busy || b.disabled;
@@ -174,7 +176,6 @@ pub fn primary_button(ui: &mut Ui, t: &Tokens, top: Rect) -> Option<Rect> {
         ui.painter().add(glow.as_shape(r, pill));
     }
     ui.painter().rect(r, pill, if b.disabled { t.pressed } else { CTA_FILL }, Stroke::new(2.0, Color32::WHITE), StrokeKind::Inside);
-    let ink = if b.disabled { t.text_secondary } else if b.busy { Color32::from_gray(70) } else { Color32::BLACK };
     ui.painter().galley(r.center() - label.size() / 2.0, label, ink);
     if resp.clicked() {
         emit(json!({"type": "button", "id": b.id}));
