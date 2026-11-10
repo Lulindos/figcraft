@@ -632,13 +632,30 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
     }
     let without: Vec<&str> = overview.groups.iter().filter(|g| g.files.is_empty()).map(|g| g.name.as_str()).collect();
     if !without.is_empty() {
-        let text = format!("Projetos sem arquivo de design: {}", without.join(", "));
-        ui.add_space(4.0);
-        ui.label(egui::RichText::new(widgets::elide(ui, &text, ui.available_width().min(900.0))).font(regular(11.5)).color(t.text_secondary)).on_hover_text(text);
+        let rest = if without.len() == 1 { "1 ainda sem arquivo de design".to_string() } else { format!("{} ainda sem arquivo de design", without.len()) };
+        section_title(ui, t, "Outros projetos", &rest, 32.0);
+        project_chips(ui, t, &without);
     }
     if let Some((path, never_saved)) = opened {
         open_local(app, &path, never_saved);
     }
+}
+
+/// Os projetos que ainda não têm arquivo de design, como pílulas de vidro que quebram em quantas linhas precisar.
+fn project_chips(ui: &mut Ui, t: &Tokens, names: &[&str]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+        for name in names {
+            let shown = widgets::elide_font(ui, name.trim(), 240.0, regular(11.5));
+            let galley = ui.painter().layout_no_wrap(shown.clone(), regular(11.5), t.text_secondary);
+            let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 28.0, 28.0), Sense::hover());
+            glass(ui, t, r, 14.0, resp.hovered());
+            ui.painter().galley(pos2(r.min.x + 14.0, r.center().y - galley.size().y / 2.0), galley, t.text_secondary);
+            if shown != name.trim() {
+                resp.on_hover_text(name.trim());
+            }
+        }
+    });
 }
 
 /// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo, ou ainda baixando).
