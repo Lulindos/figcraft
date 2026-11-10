@@ -168,7 +168,20 @@ pub fn show(app: &mut FigApp, ui: &mut Ui) {
                             _ => recents(app, ui, &t),
                         }
                     } else {
-                        search_results(app, ui, &t);
+                        // LegatIA (desktop app): the search looks in the LegatIA files first; FigCraft's results (and its
+                        // "nothing matches") only when none of them matched
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let found = if cfg!(test) {
+                            0
+                        } else {
+                            let query = app.ui.home_view.file_query.trim().to_lowercase();
+                            crate::legatia::home::search(app, ui, &t, &query)
+                        };
+                        #[cfg(target_arch = "wasm32")]
+                        let found = 0;
+                        if found == 0 {
+                            search_results(app, ui, &t);
+                        }
                         opened_join(app);
                     }
                 });

@@ -413,9 +413,13 @@ fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now
         p.circle_filled(badge.center(), 15.0, t.accent);
         p.circle_filled(badge.center() + vec2(0.0, -4.0), 12.0, Color32::from_white_alpha(22));
         p.text(badge.center(), Align2::CENTER_CENTER, initial(&o.user.name), semibold(13.0), t.accent_on);
-        let room = pill_w - 52.0 - 14.0;
+        let room = pill_w - 52.0 - 34.0;
         p.text(pos2(pill.min.x + 48.0, pill.center().y - 7.0), Align2::LEFT_CENTER, line(ui, &o.user.name, room, semibold(12.5)), semibold(12.5), t.text);
         p.text(pos2(pill.min.x + 48.0, pill.center().y + 9.0), Align2::LEFT_CENTER, line(ui, &o.user.email, room, regular(10.5)), regular(10.5), t.text_secondary);
+        // O ponto azul de "conectado", com um halo
+        let dot = pos2(pill.max.x - 18.0, pill.center().y);
+        p.circle_filled(dot, 7.0, Color32::from_rgba_unmultiplied(0x00, 0x6F, 0xFE, 40));
+        p.circle_filled(dot, 3.5, crate::legatia::BLUE_400);
         resp.on_hover_text(format!("{}\nConectado à LegatIA", o.user.email));
     }
 }
@@ -543,13 +547,22 @@ fn file_card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Respo
     }
 }
 
+/// Quantos cartões cabem numa linha de `width` e a largura de cada um: de 280 a 380 px, para caber mais projetos por tela.
+pub fn grid_shape(width: f32, gap: f32) -> (usize, f32) {
+    const MIN: f32 = 280.0;
+    const MAX: f32 = 380.0;
+    let columns = (((width + gap) / (MIN + gap)).floor() as usize).max(1);
+    let card_w = ((width - gap * (columns as f32 - 1.0)) / columns as f32).clamp(MIN.min(width.max(120.0)), MAX);
+    (columns, card_w)
+}
+
 /// Os cartões de um projeto, quantos couberem na linha; devolve o arquivo escolhido.
 fn file_grid(ui: &mut Ui, t: &Tokens, items: &[(File, bool)]) -> Option<String> {
     let mut chosen = None;
-    let gap = 20.0;
-    let (columns, card_w) = crate::home_recents::grid_columns(ui.available_width());
-    let (picture_h, base_h) = crate::home_recents::card_heights(card_w);
-    let card_h = base_h.max(picture_h + 64.0);
+    let gap = 18.0;
+    let (columns, card_w) = grid_shape(ui.available_width(), gap);
+    let picture_h = (card_w * 0.6).round();
+    let card_h = picture_h + 66.0;
     for row in items.chunks(columns) {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), card_h), Sense::hover());
         for (i, (file, attention)) in row.iter().enumerate() {
@@ -581,6 +594,9 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
         n => format!("{n} arquivos em {}", if with_files.len() == 1 { "1 projeto".to_string() } else { format!("{} projetos", with_files.len()) }),
     };
     section_title(ui, t, "Projetos", &summary, 28.0);
+    if total == 0 {
+        ui.label(egui::RichText::new("Os arquivos de design dos seus projetos aparecem aqui. Crie um arquivo, salve na pasta LegatIA Design e ele vai para a nuvem.").font(regular(12.0)).color(t.text_secondary));
+    }
     let mut opened: Option<(PathBuf, bool)> = None;
     for group in &with_files {
         ui.add_space(14.0);
@@ -588,7 +604,11 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
         let label = ui.painter().layout_no_wrap(group.name.clone(), semibold(13.0), t.text);
         let w = label.size().x;
         ui.painter().galley(pos2(r.min.x, r.center().y - label.size().y / 2.0), label, t.text);
-        ui.painter().text(pos2(r.min.x + w + 10.0, r.center().y + 0.5), Align2::LEFT_CENTER, group.files.len().to_string(), regular(11.0), t.text_secondary);
+        // A contagem numa pílula de vidro
+        let count = ui.painter().layout_no_wrap(group.files.len().to_string(), semibold(10.5), t.text_secondary);
+        let chip = Rect::from_min_size(pos2(r.min.x + w + 10.0, r.center().y - 9.0), vec2(count.size().x + 14.0, 18.0));
+        ui.painter().rect_filled(chip, CornerRadius::same(9), if t.dark { Color32::from_white_alpha(14) } else { t.hover });
+        ui.painter().galley(pos2(chip.min.x + 7.0, chip.center().y - count.size().y / 2.0), count, t.text_secondary);
         ui.add_space(10.0);
         let items: Vec<(File, bool)> = {
             let s = shared();
@@ -617,16 +637,58 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
         ui.label(egui::RichText::new(widgets::elide(ui, &text, ui.available_width().min(900.0))).font(regular(11.5)).color(t.text_secondary)).on_hover_text(text);
     }
     if let Some((path, never_saved)) = opened {
-        if path.is_file() {
-            if app.run_user("file.open", serde_json::json!({"path": path.to_string_lossy()})).is_some() {
-                app.ui.home = false;
+        open_local(app, &path, never_saved);
+    }
+}
+
+/// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo, ou ainda baixando).
+fn open_local(app: &mut FigApp, path: &Path, never_saved: bool) {
+    if path.is_file() {
+        if app.run_user("file.open", serde_json::json!({"path": path.to_string_lossy()})).is_some() {
+            app.ui.home = false;
+        }
+    } else if never_saved {
+        app.toast("Este arquivo ainda não tem nenhuma versão salva na LegatIA.");
+    } else {
+        app.toast("O arquivo ainda está sendo baixado para o computador. Tente de novo em alguns segundos.");
+    }
+}
+
+/// O arquivo de nome `name`, no projeto `group`, aparece numa busca por `query` (já em minúsculas)? Procura nos dois.
+pub fn matches(group: &str, name: &str, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    !query.is_empty() && (name.to_lowercase().contains(&query) || group.to_lowercase().contains(&query))
+}
+
+/// A busca da Home (o campo da barra lateral): os arquivos da LegatIA cujo nome ou projeto tem o texto, como cartões. Devolve quantos.
+pub fn search(app: &mut FigApp, ui: &mut Ui, t: &Tokens, query: &str) -> usize {
+    let Some(overview) = shared().overview.clone().filter(|o| o.state == "ok") else { return 0 };
+    let now = brasilia_now();
+    let found: Vec<(&Group, &FileInfo)> = overview.groups.iter().flat_map(|g| g.files.iter().map(move |f| (g, f))).filter(|(g, f)| matches(&g.name, &f.name, query)).collect();
+    if found.is_empty() {
+        return 0;
+    }
+    let rest = if found.len() == 1 { "1 resultado".to_string() } else { format!("{} resultados", found.len()) };
+    section_title(ui, t, "Na LegatIA", &rest, 0.0);
+    let items: Vec<(File, bool)> = {
+        let s = shared();
+        found
+            .iter()
+            .map(|(g, f)| {
+                let path = local_path(&overview.root, &f.rel);
+                let thumbnail = path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default();
+                (File { id: f.id.clone(), name: f.name.clone(), detail: format!("{} · {}", g.name, detail(f, now)), badge: badge(f), thumbnail }, needs_attention(f))
+            })
+            .collect()
+    };
+    if let Some(id) = file_grid(ui, t, &items) {
+        if let Some((_, file)) = found.iter().find(|(_, f)| f.id == id) {
+            if let Some(path) = local_path(&overview.root, &file.rel) {
+                open_local(app, &path, file.state == "empty");
             }
-        } else if never_saved {
-            app.toast("Este arquivo ainda não tem nenhuma versão salva na LegatIA.");
-        } else {
-            app.toast("O arquivo ainda está sendo baixado para o computador. Tente de novo em alguns segundos.");
         }
     }
+    found.len()
 }
 
 /// O convite para ligar o app à conta (o programa roda, mas a conta ainda não foi ligada).
@@ -774,6 +836,31 @@ mod tests {
         assert_eq!(initial("  Édson"), "É");
         assert_eq!(initial(""), "?");
         assert_eq!(first_name("Maria Silva"), "Maria");
+    }
+
+    #[test]
+    fn the_grid_fits_more_cards_on_a_wide_window_and_one_on_a_narrow_one() {
+        // 1400 px de largura útil: quatro colunas, cada uma entre 280 e 380
+        let (columns, w) = grid_shape(1400.0, 18.0);
+        assert_eq!(columns, 4);
+        assert!((280.0..=380.0).contains(&w));
+        assert!(w * 4.0 + 18.0 * 3.0 <= 1400.0 + 0.5);
+        // Uma janela estreita ainda mostra um cartão inteiro, nunca zero colunas
+        let (columns, w) = grid_shape(300.0, 18.0);
+        assert_eq!(columns, 1);
+        assert!(w <= 300.0);
+        assert_eq!(grid_shape(100.0, 18.0).0, 1);
+        // Largura enorme: cartões não passam de 380
+        assert!(grid_shape(5000.0, 18.0).1 <= 380.0);
+    }
+
+    #[test]
+    fn the_search_looks_in_the_file_name_and_in_the_project() {
+        assert!(matches("Scalefy 2.0", "Dashboard", "dash"));
+        assert!(matches("Scalefy 2.0", "Dashboard", "SCALEFY"));
+        assert!(matches("Geral", "LegatIA Design System", " design "));
+        assert!(!matches("Scalefy 2.0", "Dashboard", "confido"));
+        assert!(!matches("Scalefy 2.0", "Dashboard", "   "));
     }
 
     #[test]
