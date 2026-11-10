@@ -34,6 +34,11 @@ Ao abrir o app, a Home mostra quem está conectado (o seu perfil da LegatIA) e o
 com os arquivos de cada um. Clique num arquivo para abrir. A etiqueta sobre ele conta o que precisa de atenção (baixando,
 alterado aqui, versão nova na nuvem, em edição por outra pessoa). "Novo arquivo", "Novo quadro" e "Abrir arquivo" ficam no topo.
 
+ARQUIVO NOVO NA NUVEM
+Num arquivo novo (ou que está fora da pasta LegatIA Design), "Salvar na LegatIA" (ou Ctrl+S) abre um quadro: escolha o
+projeto e o nome, e o app grava na pasta certa e envia. Na Home, clique num dos "Outros projetos" para começar um
+arquivo já ligado àquele projeto. "Salvar só neste PC..." abre o seletor comum, sem enviar.
+
 SALVAR E O ORBE
 No canto direito do painel, o botão "Salvar na LegatIA" mostra o estado do arquivo aberto (salvo na nuvem, enviando,
 em edição por outra pessoa...) e, ao clicar, salva e envia a versão nova. Ctrl+S faz o mesmo.

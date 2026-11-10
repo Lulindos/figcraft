@@ -86,6 +86,11 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   (`fonts::set_with_light`); sem ela os títulos usam a Regular.
 - **Orbe liga a IA sozinho (0.17.2):** na primeira vez que uma IA de janela recebe um pedido, `agent::connect` acrescenta as duas
   entradas da LegatIA à configuração de MCP dela (`add_entries`: texto intacto, cópia `.bak-legatia`, só grava JSON válido).
+- **Salvar um arquivo novo (0.17.3):** `legatia/save_dialog.rs` é o quadro "Salvar na LegatIA" (projeto + nome) que `FigApp::save`
+  abre para um documento sem caminho, e o botão primário abre para um arquivo "outside". Grava em `LegatIA Design\<pasta do projeto>\<nome>.figcraft`
+  com `file.saveAs` e manda `sync-now`; quem cria o arquivo na nuvem é o legatia-sync (createNew). A pasta de cada projeto vem do
+  `/native/overview` (`folder`, a mesma `sanitizeName`); `sanitize_name` em Rust espelha a do programa. Os "Outros projetos" da Home são
+  clicáveis (`prefer_project`).
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 

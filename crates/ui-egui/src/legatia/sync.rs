@@ -58,7 +58,10 @@ pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
     if !has_path {
         return p("save", "Salvar na LegatIA", "Salve o arquivo dentro da pasta LegatIA Design para ele ir para a nuvem.", false, false);
     }
-    if matches!(reply.state.as_str(), "outside" | "missing" | "none") {
+    if reply.state == "outside" {
+        return p("save", "Salvar na LegatIA", "Este arquivo está fora da pasta LegatIA Design. Clique para escolher o projeto e salvar uma cópia lá.", false, false);
+    }
+    if matches!(reply.state.as_str(), "missing" | "none") {
         return p("", "Só neste PC", "Este arquivo está fora da pasta LegatIA Design e não vai para a nuvem.", false, true);
     }
     if dirty {
@@ -117,6 +120,8 @@ pub fn chip(_app: &mut FigApp, _ui: &mut egui::Ui, _t: &crate::theme::Tokens, le
 /// no fim da barra de ferramentas; e o que acontece com os cliques desde o quadro anterior.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
+    // O quadro "Salvar na LegatIA" (projeto e nome), quando aberto
+    super::save_dialog::show(app, ctx);
     for event in super::host::take_events() {
         if event.get("type").and_then(|t| t.as_str()) != Some("button") {
             continue;
@@ -142,19 +147,30 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
 
 /// Salva no disco (como Ctrl+S) e manda o programa enviar este arquivo agora, sem esperar a próxima verificação.
 pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
+    // Um arquivo fora da pasta da LegatIA vai para ela pelo quadro (projeto e nome), não salvo no lugar onde está
+    #[cfg(not(target_arch = "wasm32"))]
+    if shared().reply.as_ref().is_some_and(|r| r.state == "outside") && super::save_dialog::open(app) {
+        return;
+    }
     app.save();
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(path) = active_path(app) {
-        let ctx = ctx.clone();
-        let _ = std::thread::Builder::new().name("legatia-sync-now".into()).spawn(move || {
-            if let Some(token) = native::token() {
-                let _ = native::http("POST", &format!("/native/sync-now?path={}", native::encode(&path)), &token, 180);
-            }
-            refresh(Some(&path), &ctx);
-        });
+        send_now(path, ctx);
     }
     #[cfg(target_arch = "wasm32")]
     let _ = ctx;
+}
+
+/// Manda o programa enviar este arquivo agora, sem esperar a próxima verificação.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn send_now(path: String, ctx: &egui::Context) {
+    let ctx = ctx.clone();
+    let _ = std::thread::Builder::new().name("legatia-sync-now".into()).spawn(move || {
+        if let Some(token) = native::token() {
+            let _ = native::http("POST", &format!("/native/sync-now?path={}", native::encode(&path)), &token, 180);
+        }
+        refresh(Some(&path), &ctx);
+    });
 }
 
 /// A foto de perfil de quem está conectado (os bytes da imagem), ou `None` sem o programa ou sem foto.
@@ -353,7 +369,10 @@ mod tests {
 
     #[test]
     fn a_file_outside_the_folder_is_quiet_and_a_new_document_asks_to_be_saved_in_it() {
-        assert!(primary(&reply("outside", ""), false, true).disabled);
+        // Fora da pasta o botão leva o arquivo para a LegatIA pelo quadro de projeto e nome
+        let outside = primary(&reply("outside", ""), false, true);
+        assert_eq!((outside.id, outside.label.as_str(), outside.disabled), ("save", "Salvar na LegatIA", false));
+        assert!(primary(&reply("missing", ""), false, true).disabled);
         let p = primary(&reply("none", ""), true, false);
         assert_eq!((p.id, p.label.as_str()), ("save", "Salvar na LegatIA"));
     }

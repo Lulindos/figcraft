@@ -51,6 +51,8 @@ pub struct FileInfo {
 pub struct Group {
     pub id: Option<i64>,
     pub name: String,
+    /// A subpasta de `LegatIA Design` que representa o projeto (vazia: o programa não disse).
+    pub folder: String,
     pub files: Vec<FileInfo>,
 }
 
@@ -283,6 +285,11 @@ fn load_thumbnails(overview: &Overview) -> bool {
 
 // ---------- o vidro: aurora, cartão e o anel ----------
 
+/// O que a Home sabe agora (a última resposta do programa de sincronização), ou `None`.
+pub fn current() -> Option<Overview> {
+    shared().overview.clone()
+}
+
 /// O raio dos cartões (o das cartas do menu e dos painéis, `PANEL_RADIUS`).
 const CARD_RADIUS: f32 = 18.0;
 
@@ -342,7 +349,7 @@ fn rounded_outline(r: Rect, radius: f32) -> Vec<Pos2> {
 }
 
 /// O anel de vidro do padrão: 1,4 px, branco do alto e do pé que some no meio. `strength` 1 é o do menu.
-fn ring(ui: &Ui, rect: Rect, radius: f32, strength: f32) {
+pub(super) fn ring(ui: &Ui, rect: Rect, radius: f32, strength: f32) {
     let stroke = PathStroke::new_uv(1.4, move |bounds, p| {
         let f = if bounds.height() > 0.0 { (p.y - bounds.min.y) / bounds.height() } else { 0.0 };
         Color32::from_white_alpha((ring_alpha(f) * strength * 255.0).round().min(255.0) as u8)
@@ -679,11 +686,18 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
             }
         }
     }
-    let without: Vec<&str> = overview.groups.iter().filter(|g| g.files.is_empty()).map(|g| g.name.as_str()).collect();
+    let without: Vec<&Group> = overview.groups.iter().filter(|g| g.files.is_empty()).collect();
     if !without.is_empty() {
         let rest = if without.len() == 1 { "1 ainda sem arquivo de design".to_string() } else { format!("{} ainda sem arquivo de design", without.len()) };
         section_title(ui, t, "Outros projetos", &rest, 32.0);
-        project_chips(ui, t, &without);
+        if let Some(group) = project_chips(ui, t, &without) {
+            // Um arquivo novo para esse projeto: o "Salvar na LegatIA" dele já abre com o projeto marcado
+            let folder = if group.folder.is_empty() { super::save_dialog::sanitize_name(&group.name, "Projeto") } else { group.folder.clone() };
+            super::save_dialog::prefer_project(&folder);
+            app.run("file.new", serde_json::json!({}));
+            app.ui.home = false;
+            app.toast(format!("Arquivo novo para “{}”. Clique em Salvar na LegatIA quando quiser guardar.", group.name.trim()));
+        }
     }
     if let Some((path, never_saved)) = opened {
         open_local(app, &path, never_saved);
@@ -691,20 +705,27 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
 }
 
 /// Os projetos que ainda não têm arquivo de design, como pílulas de vidro que quebram em quantas linhas precisar.
-fn project_chips(ui: &mut Ui, t: &Tokens, names: &[&str]) {
+/// Devolve o projeto em que a pessoa clicou (para criar um arquivo nele).
+fn project_chips<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&'a Group> {
+    let mut chosen = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
-        for name in names {
-            let shown = widgets::elide_font(ui, name.trim(), 240.0, regular(11.5));
+        for group in groups {
+            let name = group.name.trim();
+            let shown = widgets::elide_font(ui, name, 240.0, regular(11.5));
             let galley = ui.painter().layout_no_wrap(shown.clone(), regular(11.5), t.text_secondary);
-            let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 28.0, 28.0), Sense::hover());
+            let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 28.0, 28.0), Sense::click());
             glass(ui, t, r, 14.0, resp.hovered());
-            ui.painter().galley(pos2(r.min.x + 14.0, r.center().y - galley.size().y / 2.0), galley, t.text_secondary);
-            if shown != name.trim() {
-                resp.on_hover_text(name.trim());
+            ui.painter().galley(pos2(r.min.x + 14.0, r.center().y - galley.size().y / 2.0), galley, if resp.hovered() { t.text } else { t.text_secondary });
+            crate::a11y::button(&resp, name);
+            let resp = if resp.hovered() { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
+            let resp = resp.on_hover_text(if shown != name { format!("{name}\nClique para criar um arquivo neste projeto") } else { "Clique para criar um arquivo neste projeto".to_string() });
+            if resp.clicked() {
+                chosen = Some(*group);
             }
         }
     });
+    chosen
 }
 
 /// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo, ou ainda baixando).

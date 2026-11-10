@@ -67,6 +67,11 @@ impl FigApp {
             // A host-opened document is saved as the file the host gave: the host updates that file.
             self.save_download(Some(&name));
         } else {
+            // LegatIA (desktop app): a new file asks for the project and the name (the file goes to LegatIA Design\<project>)
+            #[cfg(not(target_arch = "wasm32"))]
+            if !cfg!(test) && crate::legatia::save_dialog::open(self) {
+                return;
+            }
             self.save_as_dialog();
         }
     }
