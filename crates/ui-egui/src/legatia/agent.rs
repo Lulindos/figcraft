@@ -409,7 +409,7 @@ pub fn orb(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     let working = presence.is_some() || running;
     let open = state().open;
 
-    let grow = ctx.animate_value_with_time(Id::new("legatia_orb_grow"), if open { GROW } else { 1.0 }, 0.3);
+    let grow = ctx.animate_value_with_time(Id::unique("legatia_orb_grow"), if open { GROW } else { 1.0 }, 0.3);
     let base = slot.width();
     let size = base * grow;
     let top = slot.max.y - size + 6.0 * (grow - 1.0) / (GROW - 1.0);
@@ -428,7 +428,7 @@ pub fn orb(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
 
     // O orbe é desenhado numa camada própria, por cima da dock (a textura é a do quadro anterior).
     let texture_id = o.texture.as_ref().map(egui::TextureHandle::id);
-    let (r, resp) = egui::Area::new(Id::new("legatia_orb_area"))
+    let (r, resp) = egui::Area::new(Id::unique("legatia_orb_area"))
         .order(Order::Foreground)
         .fixed_pos(at)
         .show(&ctx, |ui| {
@@ -501,7 +501,7 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
     let mut stop = false;
     let screen = ctx.content_rect();
     let left = (orb.center().x - 190.0).clamp(12.0, (screen.max.x - 384.0).max(12.0));
-    let area = egui::Area::new(Id::new("legatia_orb_panel"))
+    let area = egui::Area::new(Id::unique("legatia_orb_panel"))
         .order(Order::Foreground)
         .pivot(Align2::LEFT_BOTTOM)
         .fixed_pos(pos2(left, orb.min.y - 10.0))
@@ -581,7 +581,7 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
                     } else {
                         "Ex.: cria um card de planos no estilo LegatIA ao lado do quadro selecionado"
                     };
-                    let text_id = Id::new("legatia_orb_text");
+                    let text_id = Id::unique("legatia_orb_text");
                     let submit_key = ui.memory(|m| m.has_focus(text_id)) && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
                     let edit = egui::TextEdit::multiline(&mut s.text).id(text_id).hint_text(hint_text).font(regular(12.5)).desired_rows(3).desired_width(f32::INFINITY).interactive(!busy);
                     let out = ui.add(edit);

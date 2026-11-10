@@ -58,7 +58,7 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   sair (`apps/figcraft/src/legatia_sync.rs`), por isso uma atualização consegue trocar os arquivos.
 - `UPDATE_APP` (`crates/ui-egui/src/lib.rs`) aponta para `Lulindos/figcraft`. O aviso de versão nova aparece ao
   abrir o app; "Baixar" fecha, troca os arquivos por cima da pasta e reabre.
-- `vendor/craft-update` é a cópia do crate de atualização do craft-libs (rev `c5a1cbf`) com **uma** mudança: o
+- `vendor/craft-update` é a cópia do crate de atualização do craft-libs (rev `1b34eba`) com **uma** mudança: o
   upstream só instala atualização de binário com assinatura digital do mesmo editor, e a nossa build não tem
   certificado. Aqui a garantia é o SHA-256 que o GitHub publica para o asset da nossa release (conferido no
   download). Ao trocar para um app assinado, volte ao crate do craft-libs.

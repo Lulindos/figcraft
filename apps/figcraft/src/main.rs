@@ -128,7 +128,12 @@ impl eframe::App for App {
     fn on_exit(&mut self) {
         // With the app out of reach (busy), its recovery copies stay for the next start.
         let copies = recovery::lock(&self.recovery).take();
-        with_app(|fig| services::shutdown(fig, services::config_dir().as_deref(), copies));
+        with_app(|fig| {
+            services::shutdown(fig, services::config_dir().as_deref(), copies);
+            // An update that waits for the app to close installs now: the app lives in a
+            // thread-local, and the process can end without dropping it.
+            fig.start_pending_update();
+        });
         // The sync program ends with the app, so an update can replace its files.
         crate::legatia_sync::stop();
         // Everything is kept: end before the windows' teardown, where AppKit's Touch Bar support

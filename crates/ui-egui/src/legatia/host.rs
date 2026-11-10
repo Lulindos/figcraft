@@ -247,7 +247,7 @@ fn picture(ui: &Ui, file: &File) -> Option<egui::TextureHandle> {
     if file.thumbnail.is_empty() {
         return None;
     }
-    let id = Id::new("legatia_host_pictures");
+    let id = Id::unique("legatia_host_pictures");
     let mut pictures: Pictures = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let mut hasher = DefaultHasher::new();
     file.thumbnail.hash(&mut hasher);
@@ -285,7 +285,7 @@ pub fn file_grid(ui: &mut Ui, t: &Tokens, files: &Files) {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), card_h), Sense::hover());
         for (i, file) in row.iter().enumerate() {
             let rect = Rect::from_min_size(pos2(r.min.x + i as f32 * (card_w + gap), r.min.y), vec2(card_w, card_h));
-            let resp = ui.interact(rect, Id::new(("legatia_host_file", &file.id)), Sense::click());
+            let resp = ui.interact(rect, Id::unique(("legatia_host_file", &file.id)), Sense::click());
             crate::a11y::button(&resp, &file.name);
             if ui.is_rect_visible(rect) {
                 card(ui, t, rect, picture_h, &resp, file);
