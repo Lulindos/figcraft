@@ -338,7 +338,8 @@ pub fn current() -> Option<Overview> {
 }
 
 /// O raio dos cartões (o das cartas do menu e dos painéis, `PANEL_RADIUS`).
-const CARD_RADIUS: f32 = 18.0;
+/// Os cartões são os mesmos de "Neste computador" (os do FigCraft): cantos de 8 px, fundo do painel e um fio. Só o perfil é vidro.
+const CARD_RADIUS: f32 = 8.0;
 
 /// A opacidade do anel de vidro, de cima (0) para baixo (1): o gradiente de 180º do item ativo do menu da LegatIA
 /// (branco .45, .15, 0, 0, .15, .45).
@@ -414,6 +415,14 @@ fn glass(ui: &Ui, t: &Tokens, rect: Rect, radius: f32, hovered: bool) {
         p.rect_filled(rect, CornerRadius::same(radius as u8), if hovered { t.hover } else { t.panel });
         p.rect_stroke(rect, CornerRadius::same(radius as u8), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
     }
+}
+
+/// O cartão liso: o painel com um fio (mais claro ao passar o mouse), igual ao dos arquivos recentes do FigCraft.
+fn plain(ui: &Ui, t: &Tokens, rect: Rect, hovered: bool) {
+    let p = ui.painter();
+    let radius = CornerRadius::same(CARD_RADIUS as u8);
+    p.rect_filled(rect, radius, if hovered { t.hover } else { t.panel });
+    p.rect_stroke(rect, radius, Stroke::new(1.0, if hovered { t.border_strong } else { t.border }), egui::StrokeKind::Inside);
 }
 
 /// A luz do topo da Home: a aurora do site com o campo ASCII por cima e o degradê para o fundo (`aurora.rs`). Sempre azul.
@@ -505,7 +514,7 @@ fn action(ui: &mut Ui, t: &Tokens, rect: Rect, icon: Icon, title: &str, sub: &st
         ui.painter().rect_filled(rect, CornerRadius::same(CARD_RADIUS as u8), fill);
         ring(ui, rect, CARD_RADIUS, 1.0);
     } else {
-        glass(ui, t, rect, CARD_RADIUS, hovered);
+        plain(ui, t, rect, hovered);
     }
     let on_blue = primary && t.dark;
     let tile = Rect::from_min_size(pos2(rect.min.x + 16.0, rect.center().y - 20.0), vec2(40.0, 40.0));
@@ -656,10 +665,10 @@ fn paint_cover(ui: &Ui, rect: Rect, texture: &egui::TextureHandle, radius: u8, t
 /// a foto de quem está editando e o nome com a linha de versão.
 fn file_card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Response, card: &Card) {
     let file = &card.file;
-    glass(ui, t, rect, CARD_RADIUS, resp.hovered());
+    plain(ui, t, rect, resp.hovered());
     let p = ui.painter();
     let area = Rect::from_min_size(rect.min + vec2(8.0, 8.0), vec2(rect.width() - 16.0, picture_h - 8.0));
-    p.rect_filled(area, CornerRadius::same(12), if t.dark { Color32::from_black_alpha(120) } else { t.canvas });
+    p.rect_filled(area, CornerRadius::same(6), if t.dark { Color32::from_black_alpha(120) } else { t.canvas });
     match (super::host::picture(ui, file), card.cover.as_ref()) {
         (Some(texture), _) => {
             let size = texture.size_vec2();
@@ -668,7 +677,7 @@ fn file_card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Respo
             let image = Rect::from_center_size(inner.center(), size * fit);
             p.image(texture.id(), image, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         }
-        (None, Some(cover)) => paint_cover(ui, area, cover, 12, Color32::from_gray(150)),
+        (None, Some(cover)) => paint_cover(ui, area, cover, 6, Color32::from_gray(150)),
         (None, None) => icons::paint(p, Rect::from_center_size(area.center(), vec2(28.0, 28.0)), Icon::Page, t.icon_secondary),
     }
     if !file.badge.is_empty() {
@@ -742,39 +751,41 @@ fn file_grid(ui: &mut Ui, t: &Tokens, items: &[Card]) -> Option<String> {
     chosen
 }
 
-/// A faixa de um projeto: a capa dele ao fundo (a do Supabase), a nuvenzinha, o nome e quantos arquivos tem.
+/// O cabeçalho de um projeto: uma linha compacta com a capa dele (a do Supabase) num quadradinho, o nome e quantos arquivos tem.
 /// Devolve a capa, que os cartões ainda sem desenho usam no lugar da miniatura.
 fn banner(ui: &mut Ui, t: &Tokens, group: &Group) -> Option<egui::TextureHandle> {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 84.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::hover());
     let cover = if group.has_cover { group.id.and_then(|id| super::images::cover(ui.ctx(), id)) } else { None };
     if !ui.is_rect_visible(rect) {
         return cover;
     }
-    glass(ui, t, rect, CARD_RADIUS, false);
-    if let Some(texture) = &cover {
-        paint_cover(ui, rect, texture, CARD_RADIUS as u8, Color32::from_gray(150));
-        ring(ui, rect, CARD_RADIUS, 1.0);
-    }
-    let ink = if cover.is_some() { Color32::WHITE } else { t.text };
-    let soft = if cover.is_some() { Color32::from_white_alpha(215) } else { t.text_secondary };
-    let tile = Rect::from_center_size(pos2(rect.min.x + 38.0, rect.center().y), vec2(36.0, 36.0));
+    let tile = Rect::from_min_size(pos2(rect.min.x, rect.center().y - 22.0), vec2(44.0, 44.0));
     let p = ui.painter();
-    p.rect_filled(tile, CornerRadius::same(18), if cover.is_some() { Color32::from_black_alpha(110) } else { t.accent });
-    cloud_icon(p, tile.center(), 20.0, if cover.is_some() { Color32::WHITE } else { t.accent_on });
-    let x = rect.min.x + 68.0;
-    let room = rect.width() - 68.0 - 20.0;
-    let name = group.name.trim();
+    match &cover {
+        Some(texture) => {
+            paint_cover(ui, tile, texture, 10, Color32::WHITE);
+            ui.painter().rect_stroke(tile, CornerRadius::same(10), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+        }
+        None => {
+            p.rect_filled(tile, CornerRadius::same(10), t.accent);
+            cloud_icon(p, tile.center(), 22.0, t.accent_on);
+        }
+    }
+    let p = ui.painter();
+    if cover.is_some() {
+        // A nuvenzinha no canto da capa
+        let pill = Rect::from_min_size(pos2(tile.max.x - 20.0, tile.max.y - 14.0), vec2(24.0, 18.0));
+        p.rect_filled(pill, CornerRadius::same(9), t.accent);
+        cloud_icon(p, pill.center(), 13.0, t.accent_on);
+    }
+    let x = tile.max.x + 18.0;
+    let room = rect.max.x - x - 8.0;
     let count = match group.files.len() {
         1 => "1 arquivo".to_string(),
         n => format!("{n} arquivos"),
     };
-    let title = line(ui, name, room, semibold(16.0));
-    // Uma sombra leve: o texto lê bem sobre qualquer capa
-    if cover.is_some() {
-        p.text(pos2(x, rect.center().y - 9.0), Align2::LEFT_CENTER, &title, semibold(16.0), Color32::from_black_alpha(150));
-    }
-    p.text(pos2(x, rect.center().y - 10.0), Align2::LEFT_CENTER, &title, semibold(16.0), ink);
-    p.text(pos2(x, rect.center().y + 12.0), Align2::LEFT_CENTER, format!("{count} · projeto na nuvem"), regular(11.5), soft);
+    p.text(pos2(x, rect.center().y - 9.0), Align2::LEFT_CENTER, line(ui, group.name.trim(), room, semibold(16.0)), semibold(16.0), t.text);
+    ui.painter().text(pos2(x, rect.center().y + 11.0), Align2::LEFT_CENTER, format!("{count} · projeto na nuvem"), regular(11.5), t.text_secondary);
     cover
 }
 
@@ -861,7 +872,7 @@ fn project_search<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&
     let mut chosen = enter.then(|| found[0]);
     for group in found.iter().take(RESULTS) {
         let (r, resp) = ui.allocate_exact_size(vec2(width, 36.0), Sense::click());
-        glass(ui, t, r, 12.0, resp.hovered());
+        plain(ui, t, r, resp.hovered());
         let name = line(ui, group.name.trim(), width - 190.0, regular(12.5));
         let p = ui.painter();
         p.text(pos2(r.min.x + 16.0, r.center().y), Align2::LEFT_CENTER, name, regular(12.5), t.text);
@@ -932,7 +943,7 @@ fn connect_card(ui: &mut Ui, t: &Tokens) {
     ui.add_space(8.0);
     let width = ui.available_width().min(640.0);
     let (rect, _) = ui.allocate_exact_size(vec2(width, 96.0), Sense::hover());
-    glass(ui, t, rect, CARD_RADIUS, false);
+    plain(ui, t, rect, false);
     let p = ui.painter();
     p.text(pos2(rect.min.x + 24.0, rect.min.y + 32.0), Align2::LEFT_CENTER, "Falta ligar o app à sua conta", semibold(14.0), t.text);
     p.text(pos2(rect.min.x + 24.0, rect.min.y + 56.0), Align2::LEFT_CENTER, "No site, em Design, clique em “App no computador”.", regular(11.5), t.text_secondary);
