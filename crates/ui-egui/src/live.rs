@@ -189,6 +189,10 @@ pub fn text_on(fill: Color32) -> Color32 {
 
 /// An avatar: the initials in a circle of the person's colour.
 pub fn avatar(painter: &egui::Painter, center: Pos2, r: f32, name: &str, fill: Color32) {
+    // LegatIA: the person's profile photo when their name is a LegatIA account's
+    if crate::legatia::paint_person(painter, center, r, name) {
+        return;
+    }
     painter.circle_filled(center, r, fill);
     painter.text(center, Align2::CENTER_CENTER, initials(name), semibold(r * 0.8), text_on(fill));
 }
@@ -207,9 +211,16 @@ pub fn pointer(painter: &egui::Painter, tip: Pos2, fill: Color32) {
 /// their text caret).
 pub(crate) fn name_tag(painter: &egui::Painter, anchor: Pos2, align: Align2, name: &str, fill: Color32) {
     let galley = painter.layout_no_wrap(name.to_string(), semibold(11.0), text_on(fill));
-    let r = align.anchor_size(anchor, galley.size() + vec2(12.0, 6.0));
-    painter.rect_filled(r, CornerRadius::same(4), fill);
-    painter.galley(r.min + vec2(6.0, 3.0), galley, text_on(fill));
+    // LegatIA: the person's photo at the start of the tag, when there is one
+    let photo = crate::legatia::person_has_photo(painter.ctx(), name);
+    let room = if photo { galley.size().y + 4.0 } else { 0.0 };
+    let r = align.anchor_size(anchor, galley.size() + vec2(12.0 + room, 6.0));
+    painter.rect_filled(r, CornerRadius::same(if photo { (r.height() / 2.0) as u8 } else { 4 }), fill);
+    if photo {
+        let d = r.height() - 4.0;
+        crate::legatia::paint_person(painter, pos2(r.min.x + 2.0 + d / 2.0, r.center().y), d / 2.0, name);
+    }
+    painter.galley(r.min + vec2(6.0 + room, 3.0), galley, text_on(fill));
 }
 
 /// How opaque a chat message `age` seconds after its last change is (0: gone); asks for the frame

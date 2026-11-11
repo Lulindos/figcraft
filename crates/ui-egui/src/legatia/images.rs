@@ -116,6 +116,21 @@ pub fn avatar(ctx: &egui::Context, user_id: &str) -> Option<egui::TextureHandle>
     texture(ctx, &format!("avatar:{user_id}"), &target, 96)
 }
 
+/// O endereço (no programa) da foto de alguém pelo nome que aparece na sessão ao vivo ou num comentário (o nome da conta
+/// da LegatIA). `None` para um nome vazio ou comprido demais.
+pub fn avatar_name_target(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control))
+        .then(|| format!("/native/avatar?name={}", super::sync::encode_query(name)))
+}
+
+/// A foto de alguém pelo nome (o cursor de quem está na sessão ao vivo, o autor de um comentário), ou `None` enquanto não
+/// chegou, se o nome não é de ninguém da LegatIA ou se a pessoa não tem foto.
+pub fn avatar_by_name(ctx: &egui::Context, name: &str) -> Option<egui::TextureHandle> {
+    let target = avatar_name_target(name)?;
+    texture(ctx, &format!("avatar-name:{}", name.trim()), &target, 96)
+}
+
 /// A capa de um projeto (por id), ou `None` enquanto não chegou ou se o projeto não tem capa.
 pub fn cover(ctx: &egui::Context, project_id: i64) -> Option<egui::TextureHandle> {
     texture(ctx, &format!("cover:{project_id}"), &cover_target(project_id), 640)
@@ -132,6 +147,15 @@ pub fn cover_uv(size: egui::Vec2, aspect: f32) -> egui::Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_becomes_an_address_only_when_it_looks_like_a_name() {
+        assert_eq!(avatar_name_target("João Victor").as_deref(), Some("/native/avatar?name=Jo%C3%A3o%20Victor"));
+        assert_eq!(avatar_name_target("  "), None);
+        assert_eq!(avatar_name_target(&"x".repeat(81)), None);
+        assert_eq!(avatar_name_target("a
+b"), None);
+    }
 
     #[test]
     fn only_a_user_id_becomes_an_address() {

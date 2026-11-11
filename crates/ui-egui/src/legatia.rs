@@ -164,6 +164,50 @@ pub fn paint_my_avatar(ui: &Ui, center: Pos2, radius: f32) -> bool {
     false
 }
 
+/// The LegatIA profile photo of a person by the name they show (the cursor of someone in a live session, the author of a
+/// comment, the people bar), cropped to a circle: `true` when it was painted (`false`: no photo yet, or not a LegatIA name).
+pub fn paint_person(painter: &egui::Painter, center: Pos2, radius: f32, name: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    if !cfg!(test) {
+        if let Some(texture) = images::avatar_by_name(painter.ctx(), name) {
+            paint_round(painter, &texture, center, radius);
+            return true;
+        }
+    }
+    let _ = (painter, center, radius, name);
+    false
+}
+
+/// Whether a photo for `name` is ready to paint (so a name tag can leave room for it).
+pub fn person_has_photo(ctx: &egui::Context, name: &str) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    if !cfg!(test) {
+        return images::avatar_by_name(ctx, name).is_some();
+    }
+    let _ = (ctx, name);
+    false
+}
+
+/// A texture cropped to a circle (the centre square of it), as a fan of triangles: a painter has no rounded images.
+#[cfg(not(target_arch = "wasm32"))]
+fn paint_round(painter: &egui::Painter, texture: &egui::TextureHandle, center: Pos2, radius: f32) {
+    let uv = images::cover_uv(texture.size_vec2(), 1.0);
+    let mut mesh = egui::Mesh::with_texture(texture.id());
+    let n = 40u32;
+    mesh.vertices.push(egui::epaint::Vertex { pos: center, uv: uv.center(), color: egui::Color32::WHITE });
+    for i in 0..=n {
+        let a = i as f32 / n as f32 * std::f32::consts::TAU;
+        let (s, c) = a.sin_cos();
+        let pos = center + egui::vec2(c, s) * radius;
+        let tex = egui::pos2(uv.center().x + c * uv.width() / 2.0, uv.center().y + s * uv.height() / 2.0);
+        mesh.vertices.push(egui::epaint::Vertex { pos, uv: tex, color: egui::Color32::WHITE });
+        if i > 0 {
+            mesh.add_triangle(0, i, i + 1);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
 /// The window started on the Home with an untouched blank file behind it (see `apps/figcraft`).
 static STARTED_ON_HOME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
