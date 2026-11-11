@@ -556,7 +556,10 @@ pub fn people_bar(app: &mut FigApp, ui: &mut Ui, area: Rect) {
     let (show, more) = if peers.len() > fit { (fit - 1, peers.len() - (fit - 1)) } else { (peers.len(), 0) };
     let mut x = area.min.x + R + 2.0;
     let ring = |ui: &Ui, c: Pos2| ui.painter().circle_stroke(c, R + 1.0, Stroke::new(2.0, t.panel));
-    avatar(ui.painter(), pos2(x, cy), R, &me_name, me_fill);
+    // LegatIA: your own profile photo, when you are signed in to LegatIA, instead of the letter
+    if !crate::legatia::paint_my_avatar(ui, pos2(x, cy), R) {
+        avatar(ui.painter(), pos2(x, cy), R, &me_name, me_fill);
+    }
     // Your avatar's menu: spotlight.
     let mut spotlight = false;
     if in_session {

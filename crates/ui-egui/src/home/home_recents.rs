@@ -555,7 +555,7 @@ impl Recents {
 /// The recent files that may be listed: all of them, or, when the app runs confined to automation
 /// roots, those inside them (no name or picture of another file is shown).
 pub(crate) fn listed(recents: &[String]) -> impl Iterator<Item = &String> {
-    recents.iter().filter(|p| figcraft_engine::file_access::allowed(p, figcraft_engine::file_access::Access::Read))
+    recents.iter().filter(|p| figcraft_engine::file_access::allowed(p, figcraft_engine::file_access::Access::Read) && !crate::legatia::hidden_recent(p))
 }
 
 /// The recent files for `ui.inspect`: `{view, sort, order, files: [{path, name, exists, picture,

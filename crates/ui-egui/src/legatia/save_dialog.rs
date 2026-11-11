@@ -303,9 +303,9 @@ mod tests {
             state: "ok".into(),
             root: "C:/x".into(),
             groups: vec![
-                Group { id: Some(2), name: "Scalefy 2.0".into(), folder: "Scalefy 2.0".into(), files: vec![FileInfo { name: "Dashboard".into(), ..Default::default() }] },
-                Group { id: Some(3), name: "Nerd pagamentos ".into(), folder: String::new(), files: vec![] },
-                Group { id: None, name: "Geral".into(), folder: "Geral".into(), files: vec![FileInfo { name: "Id vision".into(), ..Default::default() }] },
+                Group { id: Some(2), name: "Scalefy 2.0".into(), folder: "Scalefy 2.0".into(), files: vec![FileInfo { name: "Dashboard".into(), ..Default::default() }], ..Default::default() },
+                Group { id: Some(3), name: "Nerd pagamentos ".into(), folder: String::new(), files: vec![], ..Default::default() },
+                Group { id: None, name: "Geral".into(), folder: "Geral".into(), files: vec![FileInfo { name: "Id vision".into(), ..Default::default() }], ..Default::default() },
             ],
             ..Default::default()
         }

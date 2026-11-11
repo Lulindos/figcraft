@@ -9,7 +9,7 @@
 //! colaboração do FigCraft (aba Online, código de convite, "Primeiros passos") não aparece aqui. Nada disto existe no
 //! navegador.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
@@ -44,6 +44,8 @@ pub struct FileInfo {
     pub updated_at: Option<String>,
     pub updated_by_name: Option<String>,
     pub locked_by_name: Option<String>,
+    /// Quem travou o arquivo (para mostrar a foto dessa pessoa).
+    pub locked_by_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -53,6 +55,8 @@ pub struct Group {
     pub name: String,
     /// A subpasta de `LegatIA Design` que representa o projeto (vazia: o programa não disse).
     pub folder: String,
+    /// O projeto tem capa (`projects.cover_image`); a imagem vem de `/native/cover?project=<id>`.
+    pub has_cover: bool,
     pub files: Vec<FileInfo>,
 }
 
@@ -90,11 +94,13 @@ struct Shared {
     avatar: Option<egui::ColorImage>,
     avatar_at: Option<std::time::Instant>,
     avatar_texture: Option<egui::TextureHandle>,
+    /// Onde, neste computador, ficam os arquivos que estão na nuvem (em minúsculas, com `/`): a Home não os repete em "Neste computador".
+    cloud_paths: HashSet<String>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     started: bool,
 }
 
-static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { overview: None, checked: false, thumbs: HashMap::new(), avatar: None, avatar_at: None, avatar_texture: None, started: false }));
+static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| Mutex::new(Shared { overview: None, checked: false, thumbs: HashMap::new(), avatar: None, avatar_at: None, avatar_texture: None, cloud_paths: HashSet::new(), started: false }));
 
 fn shared() -> MutexGuard<'static, Shared> {
     SHARED.lock().unwrap_or_else(|e| e.into_inner())
@@ -205,6 +211,27 @@ pub fn local_path(root: &str, rel: &str) -> Option<PathBuf> {
     Some(rel.split('/').fold(PathBuf::from(root), |p, part| p.join(part)))
 }
 
+/// Um caminho do disco para comparar: barras para frente e minúsculas (o Windows não distingue).
+fn norm(path: &str) -> String {
+    path.replace('\\', "/").to_lowercase()
+}
+
+/// Os arquivos da nuvem no disco, normalizados.
+fn cloud_set(overview: &Overview) -> HashSet<String> {
+    overview.groups.iter().flat_map(|g| &g.files).filter_map(|f| local_path(&overview.root, &f.rel)).map(|p| norm(&p.to_string_lossy())).collect()
+}
+
+/// Este arquivo está na nuvem da LegatIA (a Home o mostra em "Na nuvem", não em "Neste computador")?
+pub fn is_cloud_file(path: &str) -> bool {
+    !cfg!(test) && shared().cloud_paths.contains(&norm(path))
+}
+
+/// A foto de perfil de quem está conectado, como textura, para o editor (a barra de pessoas). `None` sem foto ou sem o programa.
+pub fn my_avatar(ctx: &egui::Context) -> Option<egui::TextureHandle> {
+    ensure_started(ctx);
+    avatar_texture(ctx)
+}
+
 // ---------- a consulta ao programa ----------
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -227,6 +254,7 @@ fn ensure_started(ctx: &egui::Context) {
                 let mut s = shared();
                 let changed = s.overview != overview || !s.checked;
                 s.overview = overview.clone();
+                s.cloud_paths = overview.as_ref().map(cloud_set).unwrap_or_default();
                 s.checked = true;
                 changed
             };
@@ -538,16 +566,35 @@ fn actions(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
 
 /// Um título de seção em duas vozes: o nome na cor do texto e o resto, mais baixo, na do texto suave.
 fn section_title(ui: &mut Ui, t: &Tokens, name: &str, rest: &str, space: f32) {
+    section_heading(ui, t, name, rest, space, false);
+}
+
+/// Como [`section_title`]; `cloud` põe a nuvenzinha azul antes do nome (o que está no Supabase da LegatIA).
+fn section_heading(ui: &mut Ui, t: &Tokens, name: &str, rest: &str, space: f32, cloud: bool) {
     ui.add_space(space);
     let font = super::fonts::light(22.0);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::hover());
+    let left = if cloud { 34.0 } else { 0.0 };
+    if cloud {
+        cloud_icon(ui.painter(), pos2(r.min.x + 13.0, r.center().y), 24.0, crate::legatia::BLUE_400);
+    }
     let g = ui.painter().layout_no_wrap(name.to_string(), font, t.text);
     let w = g.size().x;
-    ui.painter().galley(pos2(r.min.x, r.center().y - g.size().y / 2.0), g, t.text);
+    ui.painter().galley(pos2(r.min.x + left, r.center().y - g.size().y / 2.0), g, t.text);
     if !rest.is_empty() {
-        ui.painter().text(pos2(r.min.x + w + 12.0, r.center().y + 2.0), Align2::LEFT_CENTER, rest, regular(12.0), t.text_secondary);
+        ui.painter().text(pos2(r.min.x + left + w + 12.0, r.center().y + 2.0), Align2::LEFT_CENTER, rest, regular(12.0), t.text_secondary);
     }
     ui.add_space(8.0);
+}
+
+/// Uma nuvenzinha cheia de `width` pontos de largura, centrada em `c` (cor sólida: as partes se sobrepõem).
+fn cloud_icon(p: &egui::Painter, c: Pos2, width: f32, color: Color32) {
+    let u = width / 13.2;
+    let c = c + vec2(-0.2 * u, 0.9 * u);
+    p.circle_filled(c + vec2(-3.6 * u, 0.8 * u), 2.8 * u, color);
+    p.circle_filled(c + vec2(-0.4 * u, -1.4 * u), 4.0 * u, color);
+    p.circle_filled(c + vec2(4.0 * u, 0.8 * u), 2.8 * u, color);
+    p.rect_filled(Rect::from_min_max(c + vec2(-3.6 * u, 0.4 * u), c + vec2(4.0 * u, 3.6 * u)), CornerRadius::ZERO, color);
 }
 
 /// A etiqueta sobre a miniatura: uma pílula, azul quando só informa e âmbar quando pede atenção.
@@ -560,24 +607,92 @@ fn badge_pill(ui: &Ui, t: &Tokens, area: Rect, text: &str, attention: bool) {
     p.galley(pill.min + vec2(9.0, 4.5), galley, ink);
 }
 
-/// O cartão de um arquivo: vidro com a miniatura num bloco escuro, a etiqueta de estado e o nome com a linha de versão.
-fn file_card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Response, file: &File, attention: bool) {
+/// Quem está editando o arquivo: a foto dessa pessoa (ou a inicial) no canto do cartão.
+struct Locker {
+    texture: Option<egui::TextureHandle>,
+    initial: String,
+}
+
+/// Tudo o que um cartão de arquivo mostra.
+struct Card {
+    file: File,
+    attention: bool,
+    /// O arquivo está na nuvem da LegatIA: a nuvenzinha no canto.
+    cloud: bool,
+    /// A capa do projeto, no lugar da miniatura (arquivo ainda sem desenho baixado).
+    cover: Option<egui::TextureHandle>,
+    locker: Option<Locker>,
+}
+
+/// Monta o cartão de um arquivo da nuvem. `with_project`: a linha de baixo diz também o projeto (na busca).
+fn make_card(ctx: &egui::Context, overview: &Overview, group: &Group, f: &FileInfo, now: DateTime<FixedOffset>, with_project: bool, cover: Option<&egui::TextureHandle>) -> Card {
+    let path = local_path(&overview.root, &f.rel);
+    let thumbnail = {
+        let s = shared();
+        path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default()
+    };
+    let has_picture = !thumbnail.is_empty();
+    let line = if with_project { format!("{} · {}", group.name, detail(f, now)) } else { detail(f, now) };
+    let locker = (f.state == "locked").then(|| Locker {
+        texture: f.locked_by_id.as_deref().and_then(|id| super::images::avatar(ctx, id)),
+        initial: initial(f.locked_by_name.as_deref().unwrap_or("?")),
+    });
+    Card {
+        file: File { id: f.id.clone(), name: f.name.clone(), detail: line, badge: badge_for(f, overview.online), thumbnail },
+        attention: needs_attention(f),
+        cloud: true,
+        cover: if has_picture { None } else { cover.cloned() },
+        locker,
+    }
+}
+
+/// Uma imagem que preenche `rect` (recorte pelo centro, sem esticar), com cantos arredondados e escurecida por `tint`.
+fn paint_cover(ui: &Ui, rect: Rect, texture: &egui::TextureHandle, radius: u8, tint: Color32) {
+    let uv = super::images::cover_uv(texture.size_vec2(), rect.width() / rect.height().max(1.0));
+    egui::Image::from_texture(egui::load::SizedTexture::new(texture.id(), rect.size())).uv(uv).corner_radius(CornerRadius::same(radius)).tint(tint).paint_at(ui, rect);
+}
+
+/// O cartão de um arquivo: vidro com a miniatura (ou a capa do projeto) num bloco escuro, a etiqueta de estado, a nuvenzinha,
+/// a foto de quem está editando e o nome com a linha de versão.
+fn file_card(ui: &Ui, t: &Tokens, rect: Rect, picture_h: f32, resp: &egui::Response, card: &Card) {
+    let file = &card.file;
     glass(ui, t, rect, CARD_RADIUS, resp.hovered());
     let p = ui.painter();
     let area = Rect::from_min_size(rect.min + vec2(8.0, 8.0), vec2(rect.width() - 16.0, picture_h - 8.0));
     p.rect_filled(area, CornerRadius::same(12), if t.dark { Color32::from_black_alpha(120) } else { t.canvas });
-    match super::host::picture(ui, file) {
-        Some(texture) => {
+    match (super::host::picture(ui, file), card.cover.as_ref()) {
+        (Some(texture), _) => {
             let size = texture.size_vec2();
             let inner = area.shrink(area.height() * 0.07);
             let fit = (inner.width() / size.x.max(1.0)).min(inner.height() / size.y.max(1.0));
             let image = Rect::from_center_size(inner.center(), size * fit);
             p.image(texture.id(), image, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         }
-        None => icons::paint(p, Rect::from_center_size(area.center(), vec2(28.0, 28.0)), Icon::Page, t.icon_secondary),
+        (None, Some(cover)) => paint_cover(ui, area, cover, 12, Color32::from_gray(150)),
+        (None, None) => icons::paint(p, Rect::from_center_size(area.center(), vec2(28.0, 28.0)), Icon::Page, t.icon_secondary),
     }
     if !file.badge.is_empty() {
-        badge_pill(ui, t, area, &file.badge, attention);
+        badge_pill(ui, t, area, &file.badge, card.attention);
+    }
+    if let Some(locker) = &card.locker {
+        // Quem está editando: a foto num círculo com o anel âmbar de "atenção"
+        let c = pos2(area.max.x - 20.0, area.min.y + 20.0);
+        p.circle_filled(c, 15.0, t.warning);
+        match &locker.texture {
+            Some(texture) => {
+                let uv = super::images::cover_uv(texture.size_vec2(), 1.0);
+                egui::Image::from_texture(egui::load::SizedTexture::new(texture.id(), vec2(26.0, 26.0))).uv(uv).corner_radius(CornerRadius::same(13)).paint_at(ui, Rect::from_center_size(c, vec2(26.0, 26.0)));
+            }
+            None => {
+                p.circle_filled(c, 13.0, Color32::from_rgb(0x1A, 0x12, 0x00));
+                p.text(c, Align2::CENTER_CENTER, &locker.initial, semibold(12.0), t.warning);
+            }
+        }
+    }
+    if card.cloud {
+        let pill = Rect::from_min_size(pos2(area.max.x - 34.0, area.max.y - 26.0), vec2(26.0, 18.0));
+        p.rect_filled(pill, CornerRadius::same(9), Color32::from_black_alpha(150));
+        cloud_icon(p, pill.center(), 13.0, Color32::WHITE);
     }
     let footer_top = area.max.y + 8.0;
     let (x, w) = (rect.min.x + 18.0, rect.width() - 36.0);
@@ -600,7 +715,7 @@ pub fn grid_shape(width: f32, gap: f32) -> (usize, f32) {
 }
 
 /// Os cartões de um projeto, quantos couberem na linha; devolve o arquivo escolhido.
-fn file_grid(ui: &mut Ui, t: &Tokens, items: &[(File, bool)]) -> Option<String> {
+fn file_grid(ui: &mut Ui, t: &Tokens, items: &[Card]) -> Option<String> {
     let mut chosen = None;
     let gap = 18.0;
     let (columns, card_w) = grid_shape(ui.available_width(), gap);
@@ -608,18 +723,18 @@ fn file_grid(ui: &mut Ui, t: &Tokens, items: &[(File, bool)]) -> Option<String> 
     let card_h = picture_h + 66.0;
     for row in items.chunks(columns) {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), card_h), Sense::hover());
-        for (i, (file, attention)) in row.iter().enumerate() {
+        for (i, card) in row.iter().enumerate() {
             let rect = Rect::from_min_size(pos2(r.min.x + i as f32 * (card_w + gap), r.min.y), vec2(card_w, card_h));
-            let resp = ui.interact(rect, egui::Id::new(("legatia_home_file", &file.id)), Sense::click());
-            crate::a11y::button(&resp, &file.name);
+            let resp = ui.interact(rect, egui::Id::new(("legatia_home_file", &card.file.id)), Sense::click());
+            crate::a11y::button(&resp, &card.file.name);
             if ui.is_rect_visible(rect) {
-                file_card(ui, t, rect, picture_h, &resp, file, *attention);
+                file_card(ui, t, rect, picture_h, &resp, card);
             }
             if resp.hovered() {
                 ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
             }
             if resp.clicked() {
-                chosen = Some(file.id.clone());
+                chosen = Some(card.file.id.clone());
             }
         }
         ui.add_space(gap);
@@ -627,7 +742,43 @@ fn file_grid(ui: &mut Ui, t: &Tokens, items: &[(File, bool)]) -> Option<String> 
     chosen
 }
 
-/// Os projetos da LegatIA com os arquivos de cada um. Um clique abre o arquivo da pasta.
+/// A faixa de um projeto: a capa dele ao fundo (a do Supabase), a nuvenzinha, o nome e quantos arquivos tem.
+/// Devolve a capa, que os cartões ainda sem desenho usam no lugar da miniatura.
+fn banner(ui: &mut Ui, t: &Tokens, group: &Group) -> Option<egui::TextureHandle> {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 84.0), Sense::hover());
+    let cover = if group.has_cover { group.id.and_then(|id| super::images::cover(ui.ctx(), id)) } else { None };
+    if !ui.is_rect_visible(rect) {
+        return cover;
+    }
+    glass(ui, t, rect, CARD_RADIUS, false);
+    if let Some(texture) = &cover {
+        paint_cover(ui, rect, texture, CARD_RADIUS as u8, Color32::from_gray(150));
+        ring(ui, rect, CARD_RADIUS, 1.0);
+    }
+    let ink = if cover.is_some() { Color32::WHITE } else { t.text };
+    let soft = if cover.is_some() { Color32::from_white_alpha(215) } else { t.text_secondary };
+    let tile = Rect::from_center_size(pos2(rect.min.x + 38.0, rect.center().y), vec2(36.0, 36.0));
+    let p = ui.painter();
+    p.rect_filled(tile, CornerRadius::same(18), if cover.is_some() { Color32::from_black_alpha(110) } else { t.accent });
+    cloud_icon(p, tile.center(), 20.0, if cover.is_some() { Color32::WHITE } else { t.accent_on });
+    let x = rect.min.x + 68.0;
+    let room = rect.width() - 68.0 - 20.0;
+    let name = group.name.trim();
+    let count = match group.files.len() {
+        1 => "1 arquivo".to_string(),
+        n => format!("{n} arquivos"),
+    };
+    let title = line(ui, name, room, semibold(16.0));
+    // Uma sombra leve: o texto lê bem sobre qualquer capa
+    if cover.is_some() {
+        p.text(pos2(x, rect.center().y - 9.0), Align2::LEFT_CENTER, &title, semibold(16.0), Color32::from_black_alpha(150));
+    }
+    p.text(pos2(x, rect.center().y - 10.0), Align2::LEFT_CENTER, &title, semibold(16.0), ink);
+    p.text(pos2(x, rect.center().y + 12.0), Align2::LEFT_CENTER, format!("{count} · projeto na nuvem"), regular(11.5), soft);
+    cover
+}
+
+/// Os projetos da LegatIA ("Na nuvem") com os arquivos de cada um. Um clique abre o arquivo da pasta.
 fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now: DateTime<FixedOffset>) {
     let with_files: Vec<&Group> = overview.groups.iter().filter(|g| !g.files.is_empty()).collect();
     let total: usize = with_files.iter().map(|g| g.files.len()).sum();
@@ -636,36 +787,17 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
         1 => "1 arquivo".to_string(),
         n => format!("{n} arquivos em {}", if with_files.len() == 1 { "1 projeto".to_string() } else { format!("{} projetos", with_files.len()) }),
     };
-    section_title(ui, t, "Projetos", &summary, 28.0);
+    section_heading(ui, t, "Na nuvem", &summary, 28.0, true);
     if total == 0 {
         ui.label(egui::RichText::new("Os arquivos de design dos seus projetos aparecem aqui. Crie um arquivo, salve na pasta LegatIA Design e ele vai para a nuvem.").font(regular(12.0)).color(t.text_secondary));
     }
     let mut opened: Option<(PathBuf, bool)> = None;
     for group in &with_files {
         ui.add_space(14.0);
-        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
-        let label = ui.painter().layout_no_wrap(group.name.clone(), semibold(13.0), t.text);
-        let w = label.size().x;
-        ui.painter().galley(pos2(r.min.x, r.center().y - label.size().y / 2.0), label, t.text);
-        // A contagem numa pílula de vidro
-        let count = ui.painter().layout_no_wrap(group.files.len().to_string(), semibold(10.5), t.text_secondary);
-        let chip = Rect::from_min_size(pos2(r.min.x + w + 10.0, r.center().y - 9.0), vec2(count.size().x + 14.0, 18.0));
-        ui.painter().rect_filled(chip, CornerRadius::same(9), if t.dark { Color32::from_white_alpha(14) } else { t.hover });
-        ui.painter().galley(pos2(chip.min.x + 7.0, chip.center().y - count.size().y / 2.0), count, t.text_secondary);
-        ui.add_space(10.0);
-        let items: Vec<(File, bool)> = {
-            let s = shared();
-            group
-                .files
-                .iter()
-                .map(|f| {
-                    let path = local_path(&overview.root, &f.rel);
-                    let thumbnail = path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default();
-                    (File { id: f.id.clone(), name: f.name.clone(), detail: detail(f, now), badge: badge_for(f, overview.online), thumbnail }, needs_attention(f))
-                })
-                .collect()
-        };
-        if let Some(id) = file_grid(ui, t, &items) {
+        let cover = banner(ui, t, group);
+        ui.add_space(12.0);
+        let cards: Vec<Card> = group.files.iter().map(|f| make_card(ui.ctx(), overview, group, f, now, false, cover.as_ref())).collect();
+        if let Some(id) = file_grid(ui, t, &cards) {
             if let Some(file) = group.files.iter().find(|f| f.id == id) {
                 if let Some(path) = local_path(&overview.root, &file.rel) {
                     opened = Some((path, file.state == "empty"));
@@ -677,7 +809,7 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
     if !without.is_empty() {
         let rest = if without.len() == 1 { "1 ainda sem arquivo de design".to_string() } else { format!("{} ainda sem arquivo de design", without.len()) };
         section_title(ui, t, "Outros projetos", &rest, 32.0);
-        if let Some(group) = project_chips(ui, t, &without) {
+        if let Some(group) = project_search(ui, t, &without) {
             // Um arquivo novo para esse projeto: o "Salvar na LegatIA" dele já abre com o projeto marcado
             let folder = if group.folder.is_empty() { super::save_dialog::sanitize_name(&group.name, "Projeto") } else { group.folder.clone() };
             super::save_dialog::prefer_project(&folder);
@@ -691,27 +823,64 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
     }
 }
 
-/// Os projetos que ainda não têm arquivo de design, como pílulas de vidro que quebram em quantas linhas precisar.
-/// Devolve o projeto em que a pessoa clicou (para criar um arquivo nele).
-fn project_chips<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&'a Group> {
-    let mut chosen = None;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
-        for group in groups {
-            let name = group.name.trim();
-            let shown = widgets::elide_font(ui, name, 240.0, regular(11.5));
-            let galley = ui.painter().layout_no_wrap(shown.clone(), regular(11.5), t.text_secondary);
-            let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 28.0, 28.0), Sense::click());
-            glass(ui, t, r, 14.0, resp.hovered());
-            ui.painter().galley(pos2(r.min.x + 14.0, r.center().y - galley.size().y / 2.0), galley, if resp.hovered() { t.text } else { t.text_secondary });
-            crate::a11y::button(&resp, name);
-            let resp = if resp.hovered() { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
-            let resp = resp.on_hover_text(if shown != name { format!("{name}\nClique para criar um arquivo neste projeto") } else { "Clique para criar um arquivo neste projeto".to_string() });
-            if resp.clicked() {
-                chosen = Some(*group);
-            }
-        }
+/// Quantos projetos a lista de resultados mostra de uma vez.
+const RESULTS: usize = 8;
+
+/// Os projetos que casam com o texto (nome contém o texto, sem diferença de maiúsculas), na ordem em que vieram.
+pub fn project_matches<'a>(groups: &[&'a Group], query: &str) -> Vec<&'a Group> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    groups.iter().copied().filter(|g| g.name.to_lowercase().contains(&needle)).collect()
+}
+
+/// A busca dos projetos que ainda não têm arquivo de design: um campo e, ao digitar, até oito resultados.
+/// Devolve o projeto em que a pessoa clicou (ou o primeiro, com Enter) para criar um arquivo nele.
+fn project_search<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&'a Group> {
+    let id = egui::Id::new("legatia_new_in_project");
+    let mut query: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    let width = ui.available_width().min(520.0);
+    let hint = format!("Buscar entre os {} projetos sem arquivo…", groups.len());
+    let mut enter = false;
+    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), widgets::FIELD_H), Sense::hover());
+    ui.scope_builder(egui::UiBuilder::new().max_rect(Rect::from_min_size(row.min, vec2(width, widgets::FIELD_H))), |ui| {
+        let response = widgets::text_input(ui, id.with("field"), &mut query, width, &hint);
+        crate::a11y::text(&response, &hint, &query);
+        enter = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     });
+    ui.data_mut(|d| d.insert_temp(id, query.clone()));
+    ui.add_space(8.0);
+    let found = project_matches(groups, &query);
+    if found.is_empty() {
+        if !query.trim().is_empty() {
+            ui.label(egui::RichText::new("Nenhum projeto com esse nome.").font(regular(11.5)).color(t.text_secondary));
+        }
+        return None;
+    }
+    let mut chosen = enter.then(|| found[0]);
+    for group in found.iter().take(RESULTS) {
+        let (r, resp) = ui.allocate_exact_size(vec2(width, 36.0), Sense::click());
+        glass(ui, t, r, 12.0, resp.hovered());
+        let name = line(ui, group.name.trim(), width - 190.0, regular(12.5));
+        let p = ui.painter();
+        p.text(pos2(r.min.x + 16.0, r.center().y), Align2::LEFT_CENTER, name, regular(12.5), t.text);
+        p.text(pos2(r.max.x - 16.0, r.center().y), Align2::RIGHT_CENTER, "Novo arquivo neste projeto", regular(11.0), if resp.hovered() { t.accent_text } else { t.text_secondary });
+        crate::a11y::button(&resp, group.name.trim());
+        if resp.hovered() {
+            ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+        }
+        if resp.clicked() {
+            chosen = Some(*group);
+        }
+        ui.add_space(6.0);
+    }
+    if found.len() > RESULTS {
+        ui.label(egui::RichText::new(format!("e mais {}: continue digitando para achar o projeto.", found.len() - RESULTS)).font(regular(11.0)).color(t.text_secondary));
+    }
+    if chosen.is_some() {
+        ui.data_mut(|d| d.insert_temp(id, String::new()));
+    }
     chosen
 }
 
@@ -747,17 +916,7 @@ pub fn search(app: &mut FigApp, ui: &mut Ui, t: &Tokens, query: &str) -> usize {
     }
     let rest = if found.len() == 1 { "1 resultado".to_string() } else { format!("{} resultados", found.len()) };
     section_title(ui, t, "Na LegatIA", &rest, 0.0);
-    let items: Vec<(File, bool)> = {
-        let s = shared();
-        found
-            .iter()
-            .map(|(g, f)| {
-                let path = local_path(&overview.root, &f.rel);
-                let thumbnail = path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default();
-                (File { id: f.id.clone(), name: f.name.clone(), detail: format!("{} · {}", g.name, detail(f, now)), badge: badge_for(f, overview.online), thumbnail }, needs_attention(f))
-            })
-            .collect()
-    };
+    let items: Vec<Card> = found.iter().map(|(g, f)| make_card(ui.ctx(), &overview, g, f, now, true, None)).collect();
     if let Some(id) = file_grid(ui, t, &items) {
         if let Some((_, file)) = found.iter().find(|(_, f)| f.id == id) {
             if let Some(path) = local_path(&overview.root, &file.rel) {
@@ -792,7 +951,7 @@ fn recents(app: &mut FigApp, ui: &mut Ui, t: &Tokens) {
     if crate::home_recents::listed(&app.session.prefs.recent_files).next().is_none() {
         return;
     }
-    section_title(ui, t, "Neste computador", "arquivos que você abriu faz pouco", 36.0);
+    section_title(ui, t, "Neste computador", "arquivos abertos faz pouco, fora da nuvem", 36.0);
     crate::home_recents::section(app, ui, t, "");
 }
 
@@ -842,6 +1001,39 @@ mod tests {
         assert!(parse(r#"{"state":"unpaired"}"#).is_some());
         assert!(parse(r#"{"state":"outro"}"#).is_none());
         assert!(parse("não é json").is_none());
+    }
+
+    #[test]
+    fn the_overview_carries_the_cover_and_who_locked() {
+        let body = r#"{"state":"ok","root":"C:/x","groups":[{"id":3,"name":"Scalefy","hasCover":true,"files":[{"id":"a","name":"Home","state":"locked","lockedByName":"Ana","lockedById":"22222222-2222-4222-8222-222222222222"}]},{"id":4,"name":"Sem capa","files":[]}]}"#;
+        let o = parse(body).unwrap();
+        assert!(o.groups[0].has_cover && !o.groups[1].has_cover);
+        assert_eq!(o.groups[0].files[0].locked_by_id.as_deref(), Some("22222222-2222-4222-8222-222222222222"));
+    }
+
+    #[test]
+    fn the_cloud_files_are_known_by_a_normalized_path() {
+        let o = Overview {
+            state: "ok".into(),
+            root: r"C:\Users\Ana\LegatIA Design".into(),
+            groups: vec![Group { name: "Loja".into(), files: vec![FileInfo { rel: "Loja/Home.figcraft".into(), ..Default::default() }], ..Default::default() }],
+            ..Default::default()
+        };
+        let set = cloud_set(&o);
+        // O app guarda o caminho do jeito do Windows e com outra caixa: ainda é o mesmo arquivo
+        assert!(set.contains(&norm(r"c:\users\ana\legatia design\Loja\Home.figcraft")));
+        assert!(!set.contains(&norm(r"C:\Users\Ana\Documentos\Home.figcraft")));
+    }
+
+    #[test]
+    fn the_project_search_matches_part_of_the_name_and_shows_nothing_for_an_empty_query() {
+        let g = |name: &str| Group { name: name.into(), ..Default::default() };
+        let (a, b, c) = (g("Scalefy 2.0"), g("Confido"), g("Loja do Zé"));
+        let all = [&a, &b, &c];
+        assert_eq!(project_matches(&all, "SCALE").iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Scalefy 2.0"]);
+        assert_eq!(project_matches(&all, " o ").len(), 2, "Confido e Loja do Zé têm \"o\"; Scalefy 2.0 não");
+        assert!(project_matches(&all, "   ").is_empty());
+        assert!(project_matches(&all, "xyz").is_empty());
     }
 
     #[test]

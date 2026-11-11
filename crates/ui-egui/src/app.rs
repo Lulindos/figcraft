@@ -267,6 +267,7 @@ impl FigApp {
             self.observe_ime(&ctx, false);
             return;
         }
+        crate::legatia::leave_home_when_touched(self);
         if !self.has_files() || self.ui.home {
             home::show(self, ui);
             // The shortcuts panel belongs to the canvas; it doesn't hang over the home screen

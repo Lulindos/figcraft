@@ -23,6 +23,8 @@ pub mod glass;
 pub mod home;
 pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod images;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod save_dialog;
 pub mod strands;
 pub mod sync;
@@ -106,6 +108,75 @@ pub fn paint_wordmark(painter: &Painter, left_center: Pos2, font: FontId, t: &To
     let width = legat.size().x;
     painter.galley(Pos2::new(left_center.x, left_center.y - legat.size().y / 2.0), legat, t.text);
     painter.text(Pos2::new(left_center.x + width, left_center.y), egui::Align2::LEFT_CENTER, "IA", font, t.accent_text);
+}
+
+/// The official LegatIA logo (white, one colour) in the text colour, `height` points tall with its left edge centred on `left_center`.
+/// Used where FigCraft drew its icon and wordmark (the Home sidebar).
+pub fn paint_logo(ui: &Ui, left_center: Pos2, height: f32, t: &Tokens) {
+    use std::sync::OnceLock;
+    static LOGO: OnceLock<Option<egui::ColorImage>> = OnceLock::new();
+    let image = LOGO.get_or_init(|| {
+        let rgba = image::load_from_memory(include_bytes!("../../../assets/legatia/logo.png")).ok()?.to_rgba8();
+        Some(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
+    });
+    let Some(image) = image else {
+        paint_wordmark(ui.painter(), left_center, crate::theme::brand(height * 0.8), t);
+        return;
+    };
+    let id = egui::Id::new("legatia_logo_texture");
+    let texture = ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(id)).unwrap_or_else(|| {
+        let texture = ui.ctx().load_texture("legatia-logo", image.clone(), egui::TextureOptions::LINEAR);
+        ui.ctx().data_mut(|d| d.insert_temp(id, texture.clone()));
+        texture
+    });
+    let width = height * image.size[0] as f32 / image.size[1].max(1) as f32;
+    let rect = Rect::from_min_size(Pos2::new(left_center.x, left_center.y - height / 2.0), egui::vec2(width, height));
+    ui.painter().image(texture.id(), rect, Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(1.0, 1.0)), t.text);
+}
+
+/// The Home hides a recent file that is also in the LegatIA cloud (it is listed under "Na nuvem").
+#[cfg(not(target_arch = "wasm32"))]
+pub fn hidden_recent(path: &str) -> bool {
+    home::is_cloud_file(path)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn hidden_recent(_path: &str) -> bool {
+    false
+}
+
+/// The profile photo of whoever is signed in to LegatIA, for the people bar of the editor (`None`: the letter bubble).
+pub fn paint_my_avatar(ui: &Ui, center: Pos2, radius: f32) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    if !cfg!(test) {
+        if let Some(texture) = home::my_avatar(ui.ctx()) {
+            let size = egui::vec2(2.0 * radius, 2.0 * radius);
+            let uv = images::cover_uv(texture.size_vec2(), 1.0);
+            let rect = Rect::from_center_size(center, size);
+            egui::Image::from_texture(egui::load::SizedTexture::new(texture.id(), size)).uv(uv).corner_radius(CornerRadius::same(radius as u8)).paint_at(ui, rect);
+            return true;
+        }
+    }
+    let _ = (ui, center, radius);
+    false
+}
+
+/// The window started on the Home with an untouched blank file behind it (see `apps/figcraft`).
+static STARTED_ON_HOME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Called once at start: the app opens on the Home, and leaves it by itself the first time a file is opened or edited
+/// (an agent driving the blank file through MCP, a file opened from outside).
+pub fn start_on_home() {
+    STARTED_ON_HOME.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Leaves the Home that [`start_on_home`] opened once any document has a file or unsaved changes.
+pub fn leave_home_when_touched(app: &mut crate::FigApp) {
+    use std::sync::atomic::Ordering;
+    if app.ui.home && STARTED_ON_HOME.load(Ordering::Relaxed) && app.session.docs.iter().any(|d| d.path.is_some() || d.is_dirty()) {
+        STARTED_ON_HOME.store(false, Ordering::Relaxed);
+        app.ui.home = false;
+    }
 }
 
 /// Between the panels, and around them.

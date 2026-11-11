@@ -98,6 +98,19 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
 - **Luz do topo da Home (0.17.3):** `legatia/aurora.rs` porta a Aurora do dashboard (shader simplex, três cores por horário), o campo ASCII por
   cima (rampa, ondas, mistura overlay somada com alfa 0) e o degradê para o fundo, como `Aurora.tsx`, `AsciiField.tsx` e `app/dashboard/page.tsx`
   do site. 15 quadros por segundo; um quadro só com "reduzir movimento".
+- **Home em nuvem e desktop (0.17.4):** "Na nuvem" (nuvenzinha azul) lista os projetos do Supabase, cada um numa faixa com a capa
+  (`projects.cover_image`, via `/native/cover?project=<id>`); o arquivo ainda sem desenho baixado usa a capa no lugar da miniatura. "Neste computador" são
+  os recentes que não estão na nuvem (`home_recents::listed` esconde os da nuvem por `legatia::hidden_recent`). Os ~50 projetos sem arquivo viraram um campo de busca
+  (`project_search`, até 8 resultados). As imagens vêm do programa de sincronização por `legatia/images.rs` (fila de 3 trabalhadores, textura na
+  primeira vez que se desenha, nova tentativa em 1 min).
+- **Fotos (0.17.4):** a foto de quem está conectado troca a bolinha "Y" da barra de pessoas do editor (`legatia::paint_my_avatar`, gancho em `live::people_bar`);
+  o arquivo travado mostra a foto de quem o edita (`/native/avatar?user=<id>`, o programa aceita só UUID e só imagem do Supabase da conta).
+- **Logo oficial (0.17.4):** `assets/legatia/logo.png` (o `public/logo.png` do site, recortado) no lugar do ícone e do "Legat" + "IA" da Home (`legatia::paint_logo`).
+- **Abre na Home (0.17.4):** `main.rs` abre na Home quando nada foi aberto ou recuperado; o arquivo em branco fica atrás para o MCP e a Home
+  sai sozinha na primeira vez que um documento ganha arquivo ou alteração (`legatia::leave_home_when_touched`).
+- **Orbe envia de verdade ao Antigravity (0.17.4):** `agy -p <pedido> --settings {"permissions":{"allow":["mcp(legatia-design/*)"]}}` (só desta chamada),
+  depois de `agy mcp add` das duas entradas com a porta de agora. O pedido manda não rodar comandos de terminal. Claude Desktop, Windsurf, Cursor e VS Code
+  não têm como receber texto de fora: seguem copiando e abrindo (o painel diz isso).
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 

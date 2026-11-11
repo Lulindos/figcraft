@@ -240,7 +240,12 @@ fn main() -> eframe::Result {
     let mut fig = FigApp::new(session, Box::new(svc));
     fig.set_startup_update_check(true);
     fig.automation_roots = roots;
-    fig.ui.home = false;
+    // LegatIA: the app opens on the Home (its projects, its cloud) unless something was opened or recovered.
+    // The blank file stays behind it for anything driving the editor (MCP); the Home gives way as soon as it is used.
+    fig.ui.home = args.join.is_none() && fig.session.docs.iter().all(|d| d.path.is_none() && !d.is_dirty());
+    if fig.ui.home {
+        figcraft_ui_egui::legatia::start_on_home();
+    }
     // Files named on the command line are the user's too: their missing fonts are listed.
     fig.ui.font_checks = opened;
     fig.note_recovered(recovered.copies);

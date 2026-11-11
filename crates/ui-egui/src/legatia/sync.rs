@@ -201,8 +201,14 @@ pub fn send_now(path: String, ctx: &egui::Context) {
 /// A foto de perfil de quem está conectado (os bytes da imagem), ou `None` sem o programa ou sem foto.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn avatar_bytes() -> Option<Vec<u8>> {
+    image_bytes("/native/avatar")
+}
+
+/// Uma imagem do programa (`/native/avatar?user=<id>`, `/native/cover?project=<id>`), ou `None` sem o programa, sem rede ou sem imagem.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn image_bytes(target: &str) -> Option<Vec<u8>> {
     let token = native::token()?;
-    native::http_bytes("GET", "/native/avatar", &token, 20)
+    native::http_bytes("GET", target, &token, 20)
 }
 
 /// A Home do app: o corpo de `/native/overview` (quem está conectado e os projetos com os arquivos), ou `None` sem o programa.

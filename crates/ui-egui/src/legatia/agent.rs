@@ -6,12 +6,15 @@
 //! - **Executa sozinha** (Claude Code, Codex): o pedido vai para a IA por um comando sem janela, com a ponte MCP
 //!   (`figcraft-cli mcp --attach`) já indicada na própria chamada, sem depender de configuração prévia. A IA trabalha no
 //!   editor aberto e a resposta aparece no painel.
-//! - **Abre e cola** (Claude Desktop, Antigravity, Windsurf, Cursor, VS Code): não há jeito seguro de escrever no chat
+//! - **Antigravity** (a CLI `agy`): `agy -p` roda o pedido sem janela, como o Claude Code, e a resposta aparece no painel. O pedido
+//!   vai como argumento (o programa é aberto direto, sem passar por um shell, então o texto não é interpretado); só o conector
+//!   `legatia-design` fica autorizado (`--settings`, só desta chamada) e as entradas dele são registradas com `agy mcp add`.
+//! - **Abre e cola** (Claude Desktop, Windsurf, Cursor, VS Code, Antigravity sem a CLI): não há jeito seguro de escrever no chat
 //!   delas. O pedido é copiado, o programa abre e a pessoa cola e dá Enter. Elas precisam ter sido ligadas ao editor
 //!   (`Conectar-IA.cmd`).
 //!
 //! Nada sai deste computador além do que a própria IA escolhida já envia ao serviço dela. O texto do pedido segue pela
-//! entrada padrão do processo, nunca por uma linha de comando.
+//! entrada padrão do processo (no `agy`, como argumento do programa aberto direto, nunca por um shell).
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -53,6 +56,8 @@ enum How {
     Claude(PathBuf),
     /// Codex: `codex exec -` com o pedido na entrada padrão.
     Codex(PathBuf),
+    /// Antigravity: `agy -p <pedido>`, só com o conector da LegatIA autorizado.
+    Agy(PathBuf),
     /// Programa de janela: copia o pedido e abre.
     Open(Launch),
 }
@@ -134,6 +139,15 @@ fn find_claude() -> Option<PathBuf> {
     own.is_file().then_some(own)
 }
 
+/// O `agy.exe` (a CLI do Antigravity): no PATH ou na pasta onde o instalador dele o põe.
+fn find_agy() -> Option<PathBuf> {
+    if let Some(p) = on_path("agy.exe") {
+        return Some(p);
+    }
+    let own = env_path("LOCALAPPDATA")?.join("agy").join("bin").join("agy.exe");
+    own.is_file().then_some(own)
+}
+
 /// O `codex.exe` de verdade, dentro do pacote npm (`vendor\<alvo>in\codex.exe`).
 fn find_codex() -> Option<PathBuf> {
     if let Some(p) = on_path("codex.exe") {
@@ -191,6 +205,10 @@ fn detect() -> Vec<Ai> {
             out.push(Ai { name: "Claude Desktop", how: How::Open(Launch::Exe(exe)), config: Some(roaming.join("Claude").join("claude_desktop_config.json")) });
         }
     }
+    let agy = find_agy();
+    if let Some(exe) = &agy {
+        out.push(Ai { name: "Antigravity", how: How::Agy(exe.clone()), config: None });
+    }
     let programs = local.join("Programs");
     let windows: [(&'static str, PathBuf, PathBuf); 4] = [
         ("Antigravity", programs.join("Antigravity").join("Antigravity.exe"), home.join(".gemini").join("antigravity").join("mcp_config.json")),
@@ -199,6 +217,10 @@ fn detect() -> Vec<Ai> {
         ("VS Code", programs.join("Microsoft VS Code").join("Code.exe"), roaming.join("Code").join("User").join("mcp.json")),
     ];
     for (name, exe, config) in windows {
+        // Com a CLI, o Antigravity recebe o pedido sozinho: a janela dele não precisa ser a escolha
+        if name == "Antigravity" && agy.is_some() {
+            continue;
+        }
         if exe.is_file() {
             out.push(Ai { name, how: How::Open(Launch::Exe(exe)), config: Some(config) });
         }
@@ -218,6 +240,7 @@ fn prompt(request: &str, file: Option<&str>, layers: &[(u64, String)]) -> String
         let shown: Vec<String> = layers.iter().take(8).map(|(id, name)| format!("\"{name}\" (id {id})")).collect();
         text.push_str(&format!(" Trabalhe na seleção: {}{}.", shown.join(", "), if layers.len() > 8 { format!(" e mais {}", layers.len() - 8) } else { String::new() }));
     }
+    text.push_str(" Use somente esse conector: não rode comandos de terminal nem mexa em outros arquivos do computador.");
     text.push_str(" Confira o resultado com um print (screenshot) antes de terminar e me diga o que mudou. ");
     text.push_str(GUIDE);
     text.push_str("\n\nPedido: ");
@@ -279,6 +302,20 @@ fn claude_config(cli: &Path) -> Option<PathBuf> {
     Some(path)
 }
 
+/// Registra (ou atualiza) as duas entradas da LegatIA no `agy`, com a porta de agora: `agy mcp add` troca a entrada que já existe.
+fn agy_register(exe: &Path, cli: &Path) -> Result<(), String> {
+    for (name, args) in [(SERVER.to_string(), vec!["mcp".to_string(), "--attach".to_string(), port().to_string()]), (format!("{SERVER}-offline"), vec!["mcp".to_string()])] {
+        // `agy mcp add [flags] <nome> <comando> [args…]`: o "--" vem antes do comando, depois do nome
+        let mut c = base_command(exe);
+        c.args(["mcp", "add"]).arg(&name).arg("--").arg(cli).args(&args);
+        let out = c.stdin(Stdio::null()).output().map_err(|e| format!("Não consegui chamar o agy: {e}"))?;
+        if !out.status.success() {
+            return Err(format!("O agy não registrou o conector {name}: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+    }
+    Ok(())
+}
+
 fn spawn_run(ctx: egui::Context, ai: Ai, text: String) {
     let cancel = Arc::new(AtomicBool::new(false));
     state().run = Some(Run { ai: ai.name, cancel: cancel.clone(), done: false, ok: false, output: String::new() });
@@ -313,14 +350,24 @@ fn spawn_run(ctx: egui::Context, ai: Ai, text: String) {
                     .arg("-");
                 c
             }
+            How::Agy(exe) => {
+                if let Err(e) = agy_register(exe, &cli) {
+                    return finish(false, e);
+                }
+                let settings = format!("{{\"permissions\":{{\"allow\":[\"mcp({SERVER}/*)\"]}}}}");
+                let mut c = base_command(exe);
+                c.arg("--settings").arg(settings).arg("-p").arg(&text);
+                c
+            }
             How::Open(_) => return finish(false, String::new()),
         };
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let pipe_text = !matches!(ai.how, How::Agy(_));
+        command.stdin(if pipe_text { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = match command.spawn() {
             Ok(c) => c,
             Err(e) => return finish(false, format!("Não consegui abrir {}: {e}", ai.name)),
         };
-        // O pedido vai pela entrada padrão e a entrada fecha: a IA lê até o fim.
+        // O pedido vai pela entrada padrão e a entrada fecha: a IA lê até o fim (o agy recebe o pedido como argumento).
         if let Some(mut stdin) = child.stdin.take() {
             let _ = stdin.write_all(text.as_bytes());
         }
@@ -644,7 +691,7 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
                     } else if ai.runs_alone() {
                         format!("O {} trabalha sozinho no editor aberto e a resposta aparece aqui.", ai.name)
                     } else {
-                        format!("Copio o pedido e abro o {}: é só colar (Ctrl+V) e dar Enter.", ai.name)
+                        format!("O {} não deixa outro programa escrever no chat dele: copio o pedido e abro o app, é só colar (Ctrl+V) e dar Enter. Para enviar sozinho, use o Antigravity, o Claude Code ou o Codex.", ai.name)
                     };
                     ui.add_space(6.0);
                     ui.label(egui::RichText::new(hint).font(regular(11.0)).color(t.text_secondary));
@@ -863,6 +910,8 @@ mod tests {
     fn programs_that_run_alone_need_no_configuration_the_others_do() {
         let alone = Ai { name: "x", how: How::Claude(PathBuf::from("c")), config: None };
         assert!(alone.runs_alone() && alone.connected());
+        let agy = Ai { name: "Antigravity", how: How::Agy(PathBuf::from("agy.exe")), config: None };
+        assert!(agy.runs_alone() && agy.connected(), "o agy trabalha sozinho e registra o conector na hora");
         let window = Ai { name: "y", how: How::Open(Launch::Exe(PathBuf::from("c"))), config: Some(PathBuf::from("não existe.json")) };
         assert!(!window.runs_alone() && !window.connected());
     }

@@ -210,8 +210,13 @@ fn dropped(app: &mut FigApp, ctx: &egui::Context) {
 /// and section tabs; choosing a section clears the file query.
 fn sidebar(app: &mut FigApp, ui: &mut Ui, t: &Tokens, left: Rect) {
     let mut y = left.min.y + 20.0;
-    crate::theme::paint_app_icon(ui, Rect::from_min_size(pos2(left.min.x + 12.0, y - 4.0), vec2(32.0, 32.0)));
-    crate::theme::paint_wordmark(ui.painter(), pos2(left.min.x + 52.0, y + 12.0), 16.0, t);
+    if cfg!(test) {
+        crate::theme::paint_app_icon(ui, Rect::from_min_size(pos2(left.min.x + 12.0, y - 4.0), vec2(32.0, 32.0)));
+        crate::theme::paint_wordmark(ui.painter(), pos2(left.min.x + 52.0, y + 12.0), 16.0, t);
+    } else {
+        // LegatIA: the official logo, not FigCraft's icon and name
+        crate::legatia::paint_logo(ui, pos2(left.min.x + 16.0, y + 12.0), 24.0, t);
+    }
     y += 52.0;
     let search = Rect::from_min_size(pos2(left.min.x + 8.0, y), vec2(SIDEBAR - 16.0, widgets::FIELD_H));
     ui.scope_builder(egui::UiBuilder::new().max_rect(search), |ui| {
