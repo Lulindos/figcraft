@@ -141,6 +141,9 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     super::live_edit::frame(app, ctx);
     // Um arquivo que a pessoa pediu na Home e que o programa foi buscar na nuvem: abre quando chega
     super::home::fetch_frame(app);
+    // Demonstrar: a câmera que acompanha o enxame e a seleção que segue o quadro da vez
+    #[cfg(not(target_arch = "wasm32"))]
+    super::reveal::frame(app, ctx);
     for event in super::host::take_events() {
         if event.get("type").and_then(|t| t.as_str()) != Some("button") {
             continue;

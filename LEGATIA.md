@@ -128,6 +128,12 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   em seguida; no fim o enxame se junta e gira. Tudo no lugar final (nada se mexe). Não toca no documento (sem desfazer, sem alteração): a linha de fundo tira uma cópia (barata) e muda nela
   só o que está no meio da animação (raio, cor, opacidade, texto até a letra N, `frame_at`) antes de desenhar com `figcraft_render::render_area_skipping` (nova, na crate `render`, deixa de
   fora as camadas que ainda não entraram). O roteiro (`plan`) é puro e testado: um cursor nunca faz duas coisas ao mesmo tempo. Esc ou "Parar" encerra. Só desktop.
+  **0.17.9 (mais orgânico):** sem relógio geral. Cada camada vira uma tarefa e vai para o cursor que chega lá primeiro, e só começa quando a camada que a contém já existe; a duração
+  sai do trabalho. O enxame cresce com o design (`cursor_count`: 1 cursor a cada 7 tarefas, de 6 a 40). Nada surge sem gesto: quadros e formas são arrastados (e ganham cor e raio, com
+  um chip do hex e do raio), ícones e imagens são arrastados e aparecem na caixa (as peças de um ícone de até 48 px vêm junto: `attached`), textos digitados com ritmo de gente (`typed`) e
+  o estilo aplicado no fim (chip da fonte). Começa pela primeira prancheta e a câmera faz o tour atrás do enxame (`reveal::frame`, chamado de `sync::host_frame`; parar de seguir quando a
+  pessoa rola ou dá zoom); a seleção segue o último quadro criado (painel de camadas e de propriedades acompanham). Sem aviso de "demonstração"; controles discretos no alto: pausar,
+  velocidade (0,5×/1×/2×/3×) e parar. No fim a vista e a seleção de antes voltam. Etiquetas que se sobreporiam não são desenhadas (`free_spot`).
 - **Foto do agente (0.17.7):** `legatia/agent_marks.rs`. Quando um agente MCP de verdade mexe no arquivo, a barra de pessoas mostra a marca dele (Claude, Codex, GPT, Antigravity,
   Gemini) no lugar da letra, pelo nome que o cliente MCP diz ao conectar (`live/agent.rs::avatar`). As imagens (`assets/legatia/agents/*.png`) vêm do conjunto aberto simple-icons
   (CC0; as marcas são de quem as criou); o Antigravity não está nele e é um "A" desenhado por nós até haver o arquivo oficial.
