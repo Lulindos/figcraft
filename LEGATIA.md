@@ -119,6 +119,9 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   "ainda estou aqui" ao porteiro, e se a permissão mudou ou a pessoa saiu do projeto a sessão cai com o motivo. "Salvar na LegatIA" numa aba ao vivo grava o desenho
   no arquivo da pasta de onde ela nasceu (`file.saveAs`), de onde o programa o envia como qualquer versão. "Sair da sessão ao vivo" volta a aba a uma cópia sua.
   O nome na sessão é o da conta da LegatIA (se a pessoa não escolheu outro). Só desktop; precisa do arquivo salvo e enviado antes.
+- **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
+  assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:
+  na Home aparece "Baixa ao abrir" e o tamanho; clicar chama `/native/fetch` (`home::open_local` → `fetch_then_open`, resposta tratada em `home::fetch_frame`) e abre quando chega.
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 

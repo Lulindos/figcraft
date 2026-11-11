@@ -46,6 +46,10 @@ pub struct FileInfo {
     pub locked_by_name: Option<String>,
     /// Quem travou o arquivo (para mostrar a foto dessa pessoa).
     pub locked_by_id: Option<String>,
+    /// O tamanho da última versão na nuvem, em bytes.
+    pub size_bytes: i64,
+    /// Grande demais para vir sozinho: só baixa quando a pessoa abre.
+    pub lazy: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -132,6 +136,7 @@ pub fn badge_for(file: &FileInfo, online: bool) -> String {
         }
     }
     match file.state.as_str() {
+        "cloud" if file.lazy => "Baixa ao abrir".into(),
         "cloud" => "Baixando…".into(),
         "empty" => "Ainda não salvo".into(),
         "pending" => "Alterado aqui".into(),
@@ -641,7 +646,11 @@ fn make_card(ctx: &egui::Context, overview: &Overview, group: &Group, f: &FileIn
         path.as_ref().and_then(|p| s.thumbs.get(p.to_string_lossy().as_ref())).and_then(|(_, png)| png.clone()).unwrap_or_default()
     };
     let has_picture = !thumbnail.is_empty();
-    let line = if with_project { format!("{} · {}", group.name, detail(f, now)) } else { detail(f, now) };
+    let mut line = if with_project { format!("{} · {}", group.name, detail(f, now)) } else { detail(f, now) };
+    // O tamanho, quando passa de 1 MB: quem abre um arquivo grande sabe que vai baixar
+    if f.size_bytes >= 1_000_000 {
+        line.push_str(&format!(" · {:.1} MB", f.size_bytes as f64 / 1_000_000.0).replace('.', ","));
+    }
     let locker = (f.state == "locked").then(|| Locker {
         texture: f.locked_by_id.as_deref().and_then(|id| super::images::avatar(ctx, id)),
         initial: initial(f.locked_by_name.as_deref().unwrap_or("?")),
@@ -802,7 +811,7 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
     if total == 0 {
         ui.label(egui::RichText::new("Os arquivos de design dos seus projetos aparecem aqui. Crie um arquivo, salve na pasta LegatIA Design e ele vai para a nuvem.").font(regular(12.0)).color(t.text_secondary));
     }
-    let mut opened: Option<(PathBuf, bool)> = None;
+    let mut opened: Option<(PathBuf, String)> = None;
     for group in &with_files {
         ui.add_space(14.0);
         let cover = banner(ui, t, group);
@@ -811,7 +820,7 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
         if let Some(id) = file_grid(ui, t, &cards) {
             if let Some(file) = group.files.iter().find(|f| f.id == id) {
                 if let Some(path) = local_path(&overview.root, &file.rel) {
-                    opened = Some((path, file.state == "empty"));
+                    opened = Some((path, file.state.clone()));
                 }
             }
         }
@@ -829,8 +838,8 @@ fn projects(app: &mut FigApp, ui: &mut Ui, t: &Tokens, overview: &Overview, now:
             app.toast(format!("Arquivo novo para “{}”. Clique em Salvar na LegatIA quando quiser guardar.", group.name.trim()));
         }
     }
-    if let Some((path, never_saved)) = opened {
-        open_local(app, &path, never_saved);
+    if let Some((path, state)) = opened {
+        open_local(app, ui.ctx(), &path, &state);
     }
 }
 
@@ -895,19 +904,76 @@ fn project_search<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&
     chosen
 }
 
-/// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo, ou ainda baixando).
-fn open_local(app: &mut FigApp, path: &Path, never_saved: bool) {
-    let offline = current().is_some_and(|o| !o.online);
-    if path.is_file() {
+/// O que o fio que baixa um arquivo da nuvem trouxe, para o app tratar no próximo quadro.
+enum Fetched {
+    /// Chegou (ou já estava aqui): abre.
+    Open(PathBuf),
+    /// Não deu para baixar: o motivo, e o arquivo velho se há um (abre assim mesmo).
+    Said(String, Option<PathBuf>),
+}
+
+static FETCHED: Mutex<Option<Fetched>> = Mutex::new(None);
+static FETCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// O app tem uma resposta do download de um arquivo da nuvem: abre o arquivo, ou diz por que não deu. Chamado a cada quadro.
+pub fn fetch_frame(app: &mut FigApp) {
+    let Some(done) = FETCHED.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
+    let open = |app: &mut FigApp, path: &Path| {
         if app.run_user("file.open", serde_json::json!({"path": path.to_string_lossy()})).is_some() {
             app.ui.home = false;
         }
-    } else if never_saved {
+    };
+    match done {
+        Fetched::Open(path) => open(app, &path),
+        Fetched::Said(msg, existing) => {
+            app.toast(msg);
+            if let Some(path) = existing {
+                open(app, &path);
+            }
+        }
+    }
+}
+
+/// Pede ao programa o arquivo `path` (que não está aqui, ou está desatualizado) e, quando chega, abre. Arquivo grande só vem assim.
+fn fetch_then_open(app: &mut FigApp, ctx: &egui::Context, path: &Path, name_hint: &str) {
+    use std::sync::atomic::Ordering;
+    if FETCHING.swap(true, Ordering::SeqCst) {
+        app.toast("Já estou baixando um arquivo. Espere terminar.");
+        return;
+    }
+    app.toast(format!("Baixando {name_hint} da LegatIA…"));
+    let (ctx, path) = (ctx.clone(), path.to_path_buf());
+    let _ = std::thread::Builder::new().name("legatia-fetch".into()).spawn(move || {
+        let existing = path.is_file().then(|| path.clone());
+        let done = match super::sync::post(&format!("/native/fetch?path={}", super::sync::encode_query(&path.to_string_lossy())), 240) {
+            Some((200, _)) => Fetched::Open(path),
+            Some((_, body)) => Fetched::Said(
+                serde_json::from_str::<serde_json::Value>(&body).ok().and_then(|v| v.get("message").and_then(|m| m.as_str()).map(str::to_string)).unwrap_or_else(|| "Não consegui baixar este arquivo agora.".into()),
+                existing,
+            ),
+            None => Fetched::Said("O programa de sincronização não respondeu. Ele precisa estar rodando.".into(), existing),
+        };
+        *FETCHED.lock().unwrap_or_else(|e| e.into_inner()) = Some(done);
+        FETCHING.store(false, Ordering::SeqCst);
+        ctx.request_repaint();
+    });
+}
+
+/// Abre o arquivo da pasta, ou diz por que ainda não dá (nunca salvo). Um arquivo que ainda não veio (os grandes só vêm quando se abrem) ou que
+/// a nuvem tem mais novo (`behind`) é baixado primeiro e abre quando chega.
+fn open_local(app: &mut FigApp, ctx: &egui::Context, path: &Path, state: &str) {
+    let offline = current().is_some_and(|o| !o.online);
+    let name = path.file_stem().map(|n| format!("“{}”", n.to_string_lossy())).unwrap_or_else(|| "o arquivo".into());
+    if state == "empty" && !path.is_file() {
         app.toast("Este arquivo ainda não tem nenhuma versão salva na LegatIA.");
+    } else if path.is_file() && (state != "behind" || offline) {
+        if app.run_user("file.open", serde_json::json!({"path": path.to_string_lossy()})).is_some() {
+            app.ui.home = false;
+        }
     } else if offline {
         app.toast("Sem conexão: este arquivo ainda não foi baixado para o computador.");
     } else {
-        app.toast("O arquivo ainda está sendo baixado para o computador. Tente de novo em alguns segundos.");
+        fetch_then_open(app, ctx, path, &name);
     }
 }
 
@@ -931,7 +997,7 @@ pub fn search(app: &mut FigApp, ui: &mut Ui, t: &Tokens, query: &str) -> usize {
     if let Some(id) = file_grid(ui, t, &items) {
         if let Some((_, file)) = found.iter().find(|(_, f)| f.id == id) {
             if let Some(path) = local_path(&overview.root, &file.rel) {
-                open_local(app, &path, file.state == "empty");
+                open_local(app, ui.ctx(), &path, &file.state);
             }
         }
     }
@@ -1108,6 +1174,11 @@ mod tests {
         // Com conexão, as de sempre
         assert_eq!(badge_for(&file("pending"), true), "Alterado aqui");
         assert_eq!(badge_for(&file("cloud"), true), "Baixando…");
+        // Grande demais para vir sozinho: diz que baixa ao abrir (e sem conexão continua "Só na nuvem")
+        let mut big = file("cloud");
+        big.lazy = true;
+        assert_eq!(badge_for(&big, true), "Baixa ao abrir");
+        assert_eq!(badge_for(&big, false), "Só na nuvem");
     }
 
     #[test]

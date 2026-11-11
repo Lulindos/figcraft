@@ -139,6 +139,8 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     super::save_dialog::show(app, ctx);
     // Editar ao vivo: o pedido do menu das pessoas, o que o programa respondeu e o aviso de que a sessão segue aberta
     super::live_edit::frame(app, ctx);
+    // Um arquivo que a pessoa pediu na Home e que o programa foi buscar na nuvem: abre quando chega
+    super::home::fetch_frame(app);
     for event in super::host::take_events() {
         if event.get("type").and_then(|t| t.as_str()) != Some("button") {
             continue;
