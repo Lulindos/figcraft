@@ -271,6 +271,11 @@ pub fn render_nodes_into(doc: &Document, ids: &[NodeId], view: &View, pix: &mut 
 
 /// [`render_nodes_into`] `time` seconds into animated GIFs.
 fn nodes_into(doc: &Document, ids: &[NodeId], view: &View, pix: &mut Pixmap, time: f64) {
+    nodes_into_skipping(doc, ids, view, pix, time, &[]);
+}
+
+/// [`nodes_into`] leaving out the layers in `skip` (and what is inside them).
+fn nodes_into_skipping(doc: &Document, ids: &[NodeId], view: &View, pix: &mut Pixmap, time: f64, skip: &[NodeId]) {
     let bounds = draw::Bounds::default();
     let ctx = draw::Ctx {
         doc,
@@ -278,7 +283,7 @@ fn nodes_into(doc: &Document, ids: &[NodeId], view: &View, pix: &mut Pixmap, tim
         outline_mode: false,
         outline: Outline::default(),
         outlined: &[],
-        skip: &[],
+        skip,
         lod: false,
         preview: false,
         magnified_image_pixels: false,
@@ -354,6 +359,22 @@ pub fn render_node(doc: &Document, id: NodeId, scale: f64) -> Option<Pixmap> {
 /// [`render_node`] `time` seconds into animated GIFs (the presenter plays them).
 pub fn render_node_at(doc: &Document, id: NodeId, scale: f64, time: f64) -> Option<Pixmap> {
     area_at(doc, &[id], export_bounds(doc, id)?, scale, time)
+}
+
+/// [`render_node`] leaving out the layers in `skip` and what is inside them (they keep their place in the layout: nothing moves).
+/// LegatIA's reveal animation draws a design with its layers coming in one by one.
+pub fn render_node_skipping(doc: &Document, id: NodeId, scale: f64, skip: &[NodeId]) -> Option<Pixmap> {
+    let b = export_bounds(doc, id)?;
+    let scale = if scale.is_finite() && scale > 0.0 { scale.min(64.0) } else { 1.0 };
+    let w = (b.width() * scale - 1e-6).ceil().max(1.0);
+    let h = (b.height() * scale - 1e-6).ceil().max(1.0);
+    if !(w <= 16_384.0 && h <= 16_384.0 && b.x0.is_finite() && b.y0.is_finite()) {
+        return None;
+    }
+    let view = View { origin: (b.x0, b.y0), scale, width: w as u32, height: h as u32 };
+    let mut pix = new_pixmap(view.width, view.height)?;
+    nodes_into_skipping(doc, &[id], &view, &mut pix, 0.0, skip);
+    Some(pix)
 }
 
 /// Rasterise `ids` (bottom to top) over page area `b` at `scale` (export): the image starts at the

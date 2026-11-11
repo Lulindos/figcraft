@@ -24,7 +24,10 @@ pub(super) fn avatar(ui: &mut Ui, c: Pos2, r: f32, name: &str) {
     let t = Tokens::get(ui.ctx());
     ui.interact(Rect::from_center_size(c, vec2(2.0 * r, 2.0 * r)), ui.scope_id().with("live_agent"), Sense::hover()).tip(name);
     ui.painter().circle_stroke(c, r + 1.0, Stroke::new(2.0, t.panel));
-    super::avatar(ui.painter(), c, r, name, AGENT);
+    // LegatIA: a marca do agente (Claude, Codex, GPT, Antigravity…) no lugar da letra, quando conhecemos
+    if !crate::legatia::agent_marks::paint(ui.painter(), ui.ctx(), c, r, name, 1.0) {
+        super::avatar(ui.painter(), c, r, name, AGENT);
+    }
     ui.painter().circle_stroke(c, r + 2.5, Stroke::new(2.0, AGENT));
 }
 

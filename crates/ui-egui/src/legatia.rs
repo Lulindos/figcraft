@@ -15,7 +15,7 @@ use crate::theme::Tokens;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod agent;
-#[cfg(not(target_arch = "wasm32"))]
+pub mod agent_marks;
 pub mod aurora;
 pub mod fonts;
 pub mod glass;
@@ -25,6 +25,8 @@ pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod images;
 pub mod live_edit;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod reveal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod save_dialog;
 pub mod strands;

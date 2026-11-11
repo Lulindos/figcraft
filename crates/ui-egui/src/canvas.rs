@@ -331,6 +331,9 @@ pub fn show(app: &mut FigApp, ui: &mut Ui, worker: &mut Worker) {
     crate::live_text::draw(app, &painter);
     crate::live::draw(app, &painter, &ctx);
     crate::live::agent::draw(app, &painter, &ctx);
+    // LegatIA: a animação que revela um quadro camada por camada (por cima do desenho, sem tocar no arquivo)
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::legatia::reveal::draw(app, &painter, &ctx);
     crate::live::chat_box(app, &ctx);
     // The other banners float below the strip that says the session is disconnected.
     let banners = rect.with_min_y(rect.min.y + crate::live::connection_banner(app, &ctx, rect));

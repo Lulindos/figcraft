@@ -639,6 +639,7 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
     let mut close = false;
     let mut send: Option<(Ai, String)> = None;
     let mut stop = false;
+    let mut demo = false;
     let screen = ctx.content_rect();
     let left = (orb.center().x - 190.0).clamp(12.0, (screen.max.x - 384.0).max(12.0));
     let area = egui::Area::new(Id::unique("legatia_orb_panel"))
@@ -661,6 +662,11 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.add(egui::Button::new(egui::RichText::new("×").font(regular(16.0)).color(t.text_secondary)).frame(false)).clicked() {
                                 close = true;
+                            }
+                            // A animação de demonstração: revela o quadro camada por camada, sem mudar nada no arquivo
+                            let b = egui::Button::new(egui::RichText::new("Demonstrar").font(regular(11.0)).color(t.text)).corner_radius(CornerRadius::same(12)).fill(t.field).stroke(Stroke::new(1.0, t.border));
+                            if ui.add(b).on_hover_text("Revela o quadro selecionado camada por camada, com cursores de agentes. Só mostra: nada muda no arquivo.").clicked() {
+                                demo = true;
                             }
                         });
                     });
@@ -777,6 +783,10 @@ fn panel(app: &mut FigApp, ctx: &egui::Context, t: &Tokens, orb: Rect, working: 
     let outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !panel_rect.contains(p) && !orb.contains(p)));
     if close || outside || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         state().open = false;
+    }
+    if demo {
+        state().open = false;
+        super::reveal::start(app, ctx);
     }
     if stop {
         if let Some(run) = state().run.as_ref() {
