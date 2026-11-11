@@ -662,6 +662,8 @@ fn people_menu(
                 t.text_secondary,
             );
         }
+        // LegatIA: começar ou sair de uma sessão ao vivo da equipe
+        crate::legatia::live_edit::people_menu_item(ui, app);
     });
     clicked
 }

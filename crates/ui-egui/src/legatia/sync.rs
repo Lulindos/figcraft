@@ -137,6 +137,8 @@ pub fn chip(_app: &mut FigApp, _ui: &mut egui::Ui, _t: &crate::theme::Tokens, le
 pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     // O quadro "Salvar na LegatIA" (projeto e nome), quando aberto
     super::save_dialog::show(app, ctx);
+    // Editar ao vivo: o pedido do menu das pessoas, o que o programa respondeu e o aviso de que a sessão segue aberta
+    super::live_edit::frame(app, ctx);
     for event in super::host::take_events() {
         if event.get("type").and_then(|t| t.as_str()) != Some("button") {
             continue;
@@ -162,6 +164,12 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
 
 /// Salva no disco (como Ctrl+S) e manda o programa enviar este arquivo agora, sem esperar a próxima verificação.
 pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
+    // A aba de uma sessão ao vivo grava o desenho no arquivo da pasta de onde ela nasceu (e o programa o envia como qualquer versão)
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(origin) = super::live_edit::origin_for_save(app) {
+        super::live_edit::save_to_origin(app, ctx, origin);
+        return;
+    }
     // Um arquivo fora da pasta da LegatIA vai para ela pelo quadro (projeto e nome), não salvo no lugar onde está
     #[cfg(not(target_arch = "wasm32"))]
     if shared().reply.as_ref().is_some_and(|r| r.state == "outside") && super::save_dialog::open(app) {
@@ -179,6 +187,19 @@ pub fn save_now(app: &mut FigApp, ctx: &egui::Context) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = ctx;
+}
+
+/// Um pedido POST ao programa (`/native/live...`): o código HTTP e o corpo, qualquer que seja o código. `None`: o programa não respondeu.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn post(target: &str, secs: u64) -> Option<(u16, String)> {
+    let token = native::token()?;
+    native::http_full("POST", target, &token, secs)
+}
+
+/// Um texto pronto para ir numa consulta (`?path=...`).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn encode_query(s: &str) -> String {
+    native::encode(s)
 }
 
 /// O programa respondeu que está sem conexão com a nuvem (e a conta já estava ligada).
@@ -308,6 +329,22 @@ mod native {
         stream.read_to_string(&mut raw).ok()?;
         let (head, body) = raw.split_once("\r\n\r\n")?;
         head.starts_with("HTTP/1.1 200").then(|| body.to_string())
+    }
+
+    /// Como [`http`], mas devolve também o código quando não é 200 (um erro do programa traz o motivo no corpo).
+    pub fn http_full(method: &str, target: &str, token: &str, read_secs: u64) -> Option<(u16, String)> {
+        let port = port();
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(400)).ok()?;
+        stream.set_read_timeout(Some(Duration::from_secs(read_secs))).ok()?;
+        stream.set_write_timeout(Some(Duration::from_secs(3))).ok()?;
+        let request = format!("{method} {target} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-Legatia-Native: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        stream.write_all(request.as_bytes()).ok()?;
+        let mut raw = String::new();
+        stream.read_to_string(&mut raw).ok()?;
+        let (head, body) = raw.split_once("\r\n\r\n")?;
+        let code = head.split_whitespace().nth(1)?.parse().ok()?;
+        Some((code, body.to_string()))
     }
 
     /// Como [`http`], mas devolve o corpo como bytes (uma imagem não é texto).

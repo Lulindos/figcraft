@@ -111,6 +111,14 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
 - **Orbe envia de verdade ao Antigravity (0.17.4):** `agy -p <pedido> --settings {"permissions":{"allow":["mcp(legatia-design/*)"]}}` (só desta chamada),
   depois de `agy mcp add` das duas entradas com a porta de agora. O pedido manda não rodar comandos de terminal. Claude Desktop, Windsurf, Cursor e VS Code
   não têm como receber texto de fora: seguem copiando e abrindo (o painel diz isso).
+- **Home sem vidro, exceto o perfil (0.17.5):** cartões de ação, de arquivo e a busca usam o cartão liso de "Neste computador" (`home::plain`, 8 px, painel e fio);
+  o projeto na nuvem é uma linha compacta com a capa num quadradinho (sem o banner largo).
+- **Editar ao vivo (0.17.5):** `legatia/live_edit.rs`. No menu das pessoas (o chevron ao lado das fotos), "Editar ao vivo com a equipe" pede ao `legatia-sync`
+  (`POST /native/live?path=`), que pergunta ao porteiro (`live.legatia.com.br/porteiro`, `tools/porteiro` no repositório do site) com a sessão da pessoa e devolve o link só dela;
+  o link abre como uma aba de sessão (`collab.join`) e a aba de onde veio (limpa) fecha. De minuto em minuto o app avisa o programa (`/native/live-ping`); ele mantém o
+  "ainda estou aqui" ao porteiro, e se a permissão mudou ou a pessoa saiu do projeto a sessão cai com o motivo. "Salvar na LegatIA" numa aba ao vivo grava o desenho
+  no arquivo da pasta de onde ela nasceu (`file.saveAs`), de onde o programa o envia como qualquer versão. "Sair da sessão ao vivo" volta a aba a uma cópia sua.
+  O nome na sessão é o da conta da LegatIA (se a pessoa não escolheu outro). Só desktop; precisa do arquivo salvo e enviado antes.
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 
