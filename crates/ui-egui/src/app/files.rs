@@ -50,6 +50,11 @@ impl FigApp {
     }
 
     pub fn save(&mut self) {
+        // LegatIA: a aba de uma sessão ao vivo grava no arquivo da pasta de onde ela nasceu (e não pede um lugar novo)
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::legatia::live_edit::request_save(self) {
+            return;
+        }
         // A branch tab saves its main file.
         let tab = figcraft_engine::branches::file_tab(&self.session);
         // A path ending in .fig is never saved over silently: a .fig destination is an export copy.

@@ -119,6 +119,14 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   "ainda estou aqui" ao porteiro, e se a permissão mudou ou a pessoa saiu do projeto a sessão cai com o motivo. "Salvar na LegatIA" numa aba ao vivo grava o desenho
   no arquivo da pasta de onde ela nasceu (`file.saveAs`), de onde o programa o envia como qualquer versão. "Sair da sessão ao vivo" volta a aba a uma cópia sua.
   O nome na sessão é o da conta da LegatIA (se a pessoa não escolheu outro). Só desktop; precisa do arquivo salvo e enviado antes.
+  **0.17.10: ao vivo sozinho e salvando sozinho.** Abrir um arquivo da pasta que está igual à nuvem já entra na sessão (`live_edit::auto_start`, uma vez
+  por arquivo por execução; quem sai pelo menu não volta sozinho). Sem o app ligado à conta, um aviso diz como ligar. A sessão grava sozinha na LegatIA:
+  só o participante de menor número de cliente (o primeiro a entrar, `saver_among`) grava, 20 s depois que a mexida para ou no máximo a cada 3 min,
+  nunca mais de uma vez a cada 2 min (`save_due`), e ao sair. Os outros não gravam (o "Salvar" deles avisa quem grava). Ctrl+S na aba ao vivo grava
+  no arquivo da pasta (`request_save`, gancho em `app/files.rs::save`). O botão primário na aba ao vivo diz "Ao vivo · salvo / salvar / enviando…"
+  (`sync::live_primary`) com o estado do arquivo de origem. O `legatia-sync` não baixa versões de um arquivo em sessão (a sessão é a verdade; a pasta
+  alcança quando ela acaba) e a gravação da sessão vale por cima da versão mais nova sem cópia de conflito.
+  Junto: atualizações do FigCraft até `7bf098d7` (colar usa o texto do evento, menus cabem na janela, aba volta na hora, chave do servidor só por wss).
 - **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
   assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:
   na Home aparece "Baixa ao abrir" e o tamanho; clicar chama `/native/fetch` (`home::open_local` → `fetch_then_open`, resposta tratada em `home::fetch_frame`) e abre quando chega.

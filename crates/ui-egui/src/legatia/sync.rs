@@ -40,12 +40,20 @@ struct Shared {
     path: Option<String>,
     /// `None`: o programa não está rodando (ou o segredo não existe), então o botão do app fica como o do FigCraft.
     reply: Option<Reply>,
+    /// O arquivo a que `reply` se refere (a resposta pode ser de um arquivo que já não está na frente).
+    reply_for: Option<String>,
     /// A consulta ao programa só existe no desktop.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     started: bool,
 }
 
-static SHARED: Mutex<Shared> = Mutex::new(Shared { path: None, reply: None, started: false });
+static SHARED: Mutex<Shared> = Mutex::new(Shared { path: None, reply: None, reply_for: None, started: false });
+
+/// O estado (`synced`, `unpaired`, `outside`…) do arquivo `path`, se a última resposta do programa é dele.
+pub fn state_for(path: &str) -> Option<String> {
+    let s = shared();
+    (s.reply_for.as_deref() == Some(path)).then(|| s.reply.as_ref().map(|r| r.state.clone())).flatten()
+}
 
 fn shared() -> MutexGuard<'static, Shared> {
     SHARED.lock().unwrap_or_else(|e| e.into_inner())
@@ -110,13 +118,39 @@ fn short(name: &str) -> String {
 }
 
 fn active_path(app: &FigApp) -> Option<String> {
+    // Na aba ao vivo, o arquivo que importa é o da pasta de onde ela nasceu (é ele que vai para a nuvem)
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(origin) = super::live_edit::live_origin(app) {
+        return Some(origin);
+    }
     app.session.docs.get(app.session.active).and_then(|d| d.path.clone())
 }
 
 fn current_primary(app: &FigApp) -> Option<Primary> {
     let reply = shared().reply.clone()?;
     let ds = app.session.docs.get(app.session.active)?;
+    #[cfg(not(target_arch = "wasm32"))]
+    if super::live_edit::live_origin(app).is_some() {
+        return Some(live_primary(&reply, ds.is_dirty(), super::live_edit::other_saver()));
+    }
     Some(primary(&reply, ds.is_dirty(), ds.path.is_some()))
+}
+
+/// O botão na aba ao vivo: diz que está ao vivo e como está a gravação. `saver`: quem grava, quando não sou eu.
+pub fn live_primary(reply: &Reply, dirty: bool, saver: Option<String>) -> Primary {
+    let tip_auto = "Todos neste arquivo veem as mudanças na hora. A sessão grava na LegatIA sozinha, alguns segundos depois que a mexida para.";
+    let p = |id: &'static str, label: &str, tip: String, busy: bool| Primary { id, label: label.to_string(), tip, busy, disabled: id.is_empty() };
+    if let Some(name) = saver {
+        return p("", "Ao vivo", format!("Todos neste arquivo veem as mudanças na hora. Quem grava na LegatIA é {name} (entrou primeiro), sozinho."), false);
+    }
+    if !reply.online {
+        return p("", "Ao vivo · sem rede", "Sem conexão com a LegatIA: a gravação espera a rede voltar.".to_string(), false);
+    }
+    match (dirty, reply.state.as_str()) {
+        (true, _) => p("save", "Ao vivo · salvar", format!("{tip_auto} Clique para gravar agora."), false),
+        (false, "uploading" | "pending") => p("", "Ao vivo · enviando…", tip_auto.to_string(), true),
+        _ => p("", "Ao vivo · salvo", tip_auto.to_string(), false),
+    }
 }
 
 /// Liga a consulta ao programa e diz qual é o arquivo aberto. O estado agora aparece no botão primário, não na barra de abas.
@@ -249,8 +283,9 @@ fn refresh(path: Option<&str>, ctx: &egui::Context) {
     let reply = native::poll(path);
     let changed = {
         let mut s = shared();
-        let changed = s.reply != reply;
+        let changed = s.reply != reply || s.reply_for.as_deref() != path;
         s.reply = reply;
+        s.reply_for = path.map(str::to_string);
         changed
     };
     if changed {
