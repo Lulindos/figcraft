@@ -122,10 +122,12 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
 - **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
   assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:
   na Home aparece "Baixa ao abrir" e o tamanho; clicar chama `/native/fetch` (`home::open_local` → `fetch_then_open`, resposta tratada em `home::fetch_frame`) e abre quando chega.
-- **Demonstrar (0.17.7):** `legatia/reveal.rs`. O botão "Demonstrar" do painel do orbe revela o quadro selecionado (ou o primeiro da página) camada por camada, por nível,
-  com um enxame de cursores genéricos (Estrutura, Cores, Texto, Detalhes; sem marca de IA) que voam em arco até cada camada e a fazem pulsar; no fim o enxame se junta e gira.
-  Não toca no documento (sem desfazer, sem alteração): o desenho vem de `figcraft_render::render_node_skipping` (uma função nova na crate `render`, que deixa de fora as camadas
-  que ainda não entraram sem mexer no layout), numa linha de fundo, e é pintado por cima do canvas (`canvas.rs` chama `reveal::draw`). Esc ou "Parar" encerra. Só desktop.
+- **Demonstrar (0.17.7, refeito na 0.17.8):** `legatia/reveal.rs`. O botão "Demonstrar" do painel do orbe recria à vista as pranchetas selecionadas (ou TODAS as da página, até 24, na
+  ordem de leitura) com um enxame de cursores genéricos (Estrutura, Cores, Texto, Detalhes; sem marca de IA): um cursor **arrasta** um retângulo (alças e "L × A" ao vivo) para criar cada
+  quadro; o quadro nasce cinza e reto e os **cantos arredondam** e as **cores trocam** até as finais; os textos são **digitados** letra por letra (com o traço piscando); o resto entra
+  em seguida; no fim o enxame se junta e gira. Tudo no lugar final (nada se mexe). Não toca no documento (sem desfazer, sem alteração): a linha de fundo tira uma cópia (barata) e muda nela
+  só o que está no meio da animação (raio, cor, opacidade, texto até a letra N, `frame_at`) antes de desenhar com `figcraft_render::render_area_skipping` (nova, na crate `render`, deixa de
+  fora as camadas que ainda não entraram). O roteiro (`plan`) é puro e testado: um cursor nunca faz duas coisas ao mesmo tempo. Esc ou "Parar" encerra. Só desktop.
 - **Foto do agente (0.17.7):** `legatia/agent_marks.rs`. Quando um agente MCP de verdade mexe no arquivo, a barra de pessoas mostra a marca dele (Claude, Codex, GPT, Antigravity,
   Gemini) no lugar da letra, pelo nome que o cliente MCP diz ao conectar (`live/agent.rs::avatar`). As imagens (`assets/legatia/agents/*.png`) vêm do conjunto aberto simple-icons
   (CC0; as marcas são de quem as criou); o Antigravity não está nele e é um "A" desenhado por nós até haver o arquivo oficial.

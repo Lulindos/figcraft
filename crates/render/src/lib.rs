@@ -377,6 +377,21 @@ pub fn render_node_skipping(doc: &Document, id: NodeId, scale: f64, skip: &[Node
     Some(pix)
 }
 
+/// [`render_area`] leaving out the layers in `skip` and what is inside them. LegatIA's reveal animation draws several frames of a page
+/// at once, with the layers that have not come in yet left out.
+pub fn render_area_skipping(doc: &Document, ids: &[NodeId], b: Rect, scale: f64, skip: &[NodeId]) -> Option<Pixmap> {
+    let scale = if scale.is_finite() && scale > 0.0 { scale.min(64.0) } else { 1.0 };
+    let w = (b.width() * scale - 1e-6).ceil().max(1.0);
+    let h = (b.height() * scale - 1e-6).ceil().max(1.0);
+    if !(w <= 16_384.0 && h <= 16_384.0 && b.x0.is_finite() && b.y0.is_finite()) {
+        return None;
+    }
+    let view = View { origin: (b.x0, b.y0), scale, width: w as u32, height: h as u32 };
+    let mut pix = new_pixmap(view.width, view.height)?;
+    nodes_into_skipping(doc, ids, &view, &mut pix, 0.0, skip);
+    Some(pix)
+}
+
 /// Rasterise `ids` (bottom to top) over page area `b` at `scale` (export): the image starts at the
 /// area's top-left and its sides round up to whole pixels. `None` past 16384 pixels a side.
 pub fn render_area(doc: &Document, ids: &[NodeId], b: Rect, scale: f64) -> Option<Pixmap> {
