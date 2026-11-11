@@ -126,6 +126,9 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   no arquivo da pasta (`request_save`, gancho em `app/files.rs::save`). O botão primário na aba ao vivo diz "Ao vivo · salvo / salvar / enviando…"
   (`sync::live_primary`) com o estado do arquivo de origem. O `legatia-sync` não baixa versões de um arquivo em sessão (a sessão é a verdade; a pasta
   alcança quando ela acaba) e a gravação da sessão vale por cima da versão mais nova sem cópia de conflito.
+  **0.17.11:** um arquivo grande (o Scalefy 2.0 tem 50 MB no servidor) leva dezenas de segundos para chegar inteiro, e a aba ao vivo só existe
+  depois disso. A regra "sem aba há 6 s = a pessoa fechou" derrubava quem tinha conexão mais lenta (entrou e saiu em 6 s, 11/11). Agora a sessão
+  chegando ou reconectando conta como aberta (`live_joining`, `session_on`).
   Junto: atualizações do FigCraft até `7bf098d7` (colar usa o texto do evento, menus cabem na janela, aba volta na hora, chave do servidor só por wss).
 - **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
   assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:

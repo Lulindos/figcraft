@@ -150,6 +150,21 @@ fn in_live_tab(app: &FigApp) -> bool {
     app.session.docs.iter().any(|d| crate::tabs::live_mark(app, d.uid).is_some())
 }
 
+/// Uma sessão ao vivo ainda chegando (o arquivo inteiro vem antes da aba: num arquivo de dezenas de MB, leva dezenas de segundos) ou
+/// reconectando. Enquanto isso não há aba, e não é que a pessoa a fechou.
+fn live_joining(app: &FigApp) -> bool {
+    let summary = app.session.live_summary();
+    summary
+        .get("sessions")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|all| all.iter().any(|s| session_on(s.get("status").and_then(|v| v.as_str()))))
+}
+
+/// O estado de uma sessão (`collab.peers` › `sessions[].status`) diz que ela ainda vale (chegando, ao vivo ou reconectando).
+pub fn session_on(status: Option<&str>) -> bool {
+    matches!(status, Some("connecting" | "live" | "reconnecting"))
+}
+
 /// O menu das pessoas pediu para começar ou sair.
 pub fn request_start() {
     state().request = Some(Request::Start);
@@ -455,7 +470,7 @@ fn keep_alive(app: &mut FigApp, ctx: &egui::Context) {
     let origin = state().origin.clone();
     let Some(origin) = origin else { return };
     let now = std::time::Instant::now();
-    if in_live_tab(app) {
+    if in_live_tab(app) || live_joining(app) {
         state().tab_seen = Some(now);
     } else if state().tab_seen.is_some_and(|t| now.duration_since(t) > GONE_AFTER) {
         // A aba foi fechada: a pessoa saiu da sessão sem o menu
@@ -521,6 +536,16 @@ mod tests {
         // Gravou há 1 min: espera completar 2
         assert!(!save_due(Some(200), Some(60), Some(60)));
         assert!(save_due(Some(200), Some(60), Some(SAVE_MIN_GAP_SECS)));
+    }
+
+    #[test]
+    fn a_session_still_arriving_or_reconnecting_is_not_a_closed_tab() {
+        assert!(session_on(Some("connecting")));
+        assert!(session_on(Some("reconnecting")));
+        assert!(session_on(Some("live")));
+        assert!(!session_on(Some("failed")));
+        assert!(!session_on(Some("off")));
+        assert!(!session_on(None));
     }
 
     #[test]
