@@ -138,6 +138,11 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   "Enviado e confirmado na LegatIA: versão N · X MB" (`sync::notice`). Arquivo que a nuvem recusa por tamanho vira `too_large`: o programa para
   de tentar (tentava a cada 8 s), o botão diz "Grande demais · tentar" e clicar tenta de novo (depois de o limite subir). Arquivo acima de 64 MB
   não pede o ao vivo (o porteiro baixaria tudo só para recusar).
+  Também na 0.17.12, **atualização com arquivo em uso**: quem tem um app de IA aberto e conectado (Claude, Codex) mantém o `figcraft-cli.exe`
+  rodando, e a atualização falhava ("O arquivo já está sendo usado por outro processo", os error 32) e voltava atrás. O atualizador
+  (`vendor/craft-update/src/portable.rs`, `replace_with`) agora renomeia o arquivo em uso para `<nome>.old-update-<tempo>` (o Windows deixa
+  renomear um .exe rodando) e põe o novo no lugar; se a atualização falhar, ele volta pelo nome; a próxima atualização apaga os que ficaram
+  de lado (`clear_aside`). Vale a partir das atualizações FEITAS pela 0.17.12 (quem atualiza é a versão instalada).
   Junto: atualizações do FigCraft até `7bf098d7` (colar usa o texto do evento, menus cabem na janela, aba volta na hora, chave do servidor só por wss).
 - **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
   assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:

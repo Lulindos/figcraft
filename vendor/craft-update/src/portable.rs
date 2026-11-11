@@ -409,6 +409,10 @@ fn replace_with(
     }
     let mut saved = Vec::new();
     let mut created = Vec::new();
+    // LegatIA: files a running program kept (an AI app runs `figcraft-cli mcp` as its connector, so figcraft-cli.exe is in use
+    // while it's open): Windows can't overwrite a running .exe but can rename it, so it goes aside and the new file takes its name.
+    let mut moved_aside: Vec<(PathBuf, PathBuf)> = Vec::new();
+    clear_aside(folder, files.iter().map(|(_, inside)| inside.as_path()));
     let copied = (|| {
         for (relative, inside) in &files {
             let target = folder.join(inside);
@@ -423,7 +427,16 @@ fn replace_with(
             } else {
                 created.push(target.clone());
             }
-            std::fs::copy(unpacked.join(relative), &target).map_err(|e| format!("couldn't replace {} ({e})", target.display()))?;
+            let source = unpacked.join(relative);
+            if let Err(e) = std::fs::copy(&source, &target) {
+                let aside = aside_name(&target);
+                if target.is_file() && std::fs::rename(&target, &aside).is_ok() {
+                    moved_aside.push((target.clone(), aside));
+                    std::fs::copy(&source, &target).map_err(|e2| format!("couldn't replace {} ({e2})", target.display()))?;
+                } else {
+                    return Err(format!("couldn't replace {} ({e})", target.display()));
+                }
+            }
         }
         // Keep the previous files until the installed copies have passed the same checks.
         for (_, inside) in &files {
@@ -435,7 +448,15 @@ fn replace_with(
         for target in &created {
             let _ = std::fs::remove_file(target);
         }
+        // A file moved aside comes back by its name (it's the one still running; copying over it would fail again)
+        for (target, aside) in &moved_aside {
+            let _ = std::fs::remove_file(target);
+            let _ = std::fs::rename(aside, target);
+        }
         for inside in &saved {
+            if moved_aside.iter().any(|(target, _)| *target == folder.join(inside)) {
+                continue;
+            }
             if let Err(restore) = std::fs::copy(backup.join(inside), folder.join(inside)) {
                 let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
                 let mut recovery = staging.as_os_str().to_owned();
@@ -457,6 +478,37 @@ fn replace_with(
         return Err(error);
     }
     Ok(())
+}
+
+/// The name a file in use goes aside as during an update (`figcraft-cli.exe.old-update-<time>`).
+fn aside_name(target: &Path) -> PathBuf {
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let mut name = target.as_os_str().to_owned();
+    name.push(format!("{ASIDE_MARK}{stamp}"));
+    PathBuf::from(name)
+}
+
+const ASIDE_MARK: &str = ".old-update-";
+
+/// Removes the files earlier updates moved aside, in the folders this update writes to. One whose program still runs stays
+/// until a later update (or the next start).
+fn clear_aside<'a>(folder: &Path, files: impl Iterator<Item = &'a Path>) {
+    let mut dirs: Vec<PathBuf> = vec![folder.to_path_buf()];
+    for inside in files {
+        if let Some(parent) = folder.join(inside).parent() {
+            if !dirs.iter().any(|d| d == parent) {
+                dirs.push(parent.to_path_buf());
+            }
+        }
+    }
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().contains(ASIDE_MARK) && entry.path().is_file() {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
 }
 
 /// The one folder that holds every file, when there is one.
@@ -529,6 +581,63 @@ mod tests {
         assert_eq!(std::fs::read(&exe).unwrap(), b"old launcher");
         assert!(!folder.join("README.md").exists());
         assert!(!staging.exists());
+    }
+
+    /// An AI app keeps `figcraft-cli.exe` running (it's their connector): Windows won't let the update write over it, but lets it
+    /// be renamed, so it goes aside and the update goes through; the next update clears what was set aside.
+    #[cfg(windows)]
+    #[test]
+    fn a_file_in_use_goes_aside_and_the_update_goes_through() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 1;
+        const FILE_SHARE_DELETE: u32 = 4;
+        let dir = tempfile::tempdir().unwrap();
+        let staging = dir.path().join("launcher-update");
+        let folder = dir.path().join("LegatIA Design");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("figcraft.exe"), "old app").unwrap();
+        let cli = folder.join("figcraft-cli.exe");
+        std::fs::write(&cli, "old cli").unwrap();
+        // As a running program holds its .exe: others may read it and rename it, not write it
+        let running = std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE).open(&cli).unwrap();
+        let zip = archive(dir.path(), "update.zip", &[("pkg/figcraft.exe", b"new app"), ("pkg/figcraft-cli.exe", b"new cli")]);
+        unpack_over(&zip, &staging, &folder, std::ffi::OsStr::new("figcraft.exe"), &|_| Ok(())).unwrap();
+        assert_eq!(std::fs::read(folder.join("figcraft.exe")).unwrap(), b"new app");
+        assert_eq!(std::fs::read(&cli).unwrap(), b"new cli");
+        let aside: Vec<_> = std::fs::read_dir(&folder).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().contains(ASIDE_MARK)).collect();
+        assert_eq!(aside.len(), 1);
+        assert_eq!(std::fs::read(aside[0].path()).unwrap(), b"old cli");
+        drop(running);
+        // The next update clears it
+        let zip = archive(dir.path(), "update2.zip", &[("pkg/figcraft.exe", b"newer app"), ("pkg/figcraft-cli.exe", b"newer cli")]);
+        unpack_over(&zip, &staging, &folder, std::ffi::OsStr::new("figcraft.exe"), &|_| Ok(())).unwrap();
+        assert!(!std::fs::read_dir(&folder).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains(ASIDE_MARK)));
+        assert_eq!(std::fs::read(&cli).unwrap(), b"newer cli");
+    }
+
+    /// When the update fails after a file went aside, that file comes back under its own name.
+    #[cfg(windows)]
+    #[test]
+    fn a_failed_update_brings_back_a_file_that_went_aside() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let staging = dir.path().join("launcher-update");
+        let folder = dir.path().join("LegatIA Design");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("figcraft.exe"), "old app").unwrap();
+        let cli = folder.join("figcraft-cli.exe");
+        std::fs::write(&cli, "old cli").unwrap();
+        let running = std::fs::OpenOptions::new().read(true).share_mode(1 | 4).open(&cli).unwrap();
+        let zip = archive(dir.path(), "update.zip", &[("pkg/figcraft-cli.exe", b"new cli"), ("pkg/figcraft.exe", b"new app")]);
+        let error = unpack_over(&zip, &staging, &folder, std::ffi::OsStr::new("figcraft.exe"), &|file| {
+            if file.ends_with("figcraft.exe") && std::fs::read(file).is_ok_and(|b| b == b"new app") { Err("bad app".into()) } else { Ok(()) }
+        })
+        .unwrap_err();
+        assert_eq!(error, "bad app");
+        drop(running);
+        assert_eq!(std::fs::read(&cli).unwrap(), b"old cli");
+        assert_eq!(std::fs::read(folder.join("figcraft.exe")).unwrap(), b"old app");
+        assert!(!std::fs::read_dir(&folder).unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains(ASIDE_MARK)));
     }
 
     fn archive(root: &Path, name: &str, files: &[(&str, &[u8])]) -> PathBuf {
