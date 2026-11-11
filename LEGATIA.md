@@ -132,6 +132,12 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
   Também na 0.17.11: a **foto de perfil** de cada pessoa no rótulo do cursor ao vivo (`live::name_tag`), na barra de pessoas (`live::avatar`) e nos
   comentários (o pino e o autor), pelo nome que a pessoa mostra (o nome da conta da LegatIA): `legatia::paint_person` → `images::avatar_by_name` →
   `legatia-sync` `/native/avatar?name=` (só quando o nome é de UMA conta; sem foto, ficam as iniciais). Recorte redondo por malha (`paint_round`).
+  **0.17.12: envio grande com barra e confirmação.** O `legatia-sync` sobe arquivos acima de 6 MB pelo envio retomável do Supabase (TUS, pedaços
+  de 6 MB; um pedaço que falha é retomado de onde parou) e diz ao app quanto já foi (`/native/status`: `sent`, `total`). O botão primário mostra
+  "Enviando 42%" com a barra azul dentro (`host::primary_button`, campo `progress`), e no fim "Enviado ✓ versão N" (2 min) mais um aviso
+  "Enviado e confirmado na LegatIA: versão N · X MB" (`sync::notice`). Arquivo que a nuvem recusa por tamanho vira `too_large`: o programa para
+  de tentar (tentava a cada 8 s), o botão diz "Grande demais · tentar" e clicar tenta de novo (depois de o limite subir). Arquivo acima de 64 MB
+  não pede o ao vivo (o porteiro baixaria tudo só para recusar).
   Junto: atualizações do FigCraft até `7bf098d7` (colar usa o texto do evento, menus cabem na janela, aba volta na hora, chave do servidor só por wss).
 - **Menos tráfego com o Supabase (0.17.6):** o `legatia-sync` (que vai no zip) consulta a nuvem só de 30 em 30 s ou quando algo muda aqui, espera a versão nova
   assentar 60 s antes de baixar, guarda capas em disco e não troca por baixo um arquivo que o app tem aberto. Arquivo grande (5 MB ou mais) só baixa quando se abre:

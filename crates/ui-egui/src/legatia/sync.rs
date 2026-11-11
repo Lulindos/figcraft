@@ -16,12 +16,42 @@ use crate::FigApp;
 pub(crate) const SITE: &str = "https://app.legatia.com.br/dashboard/design";
 
 /// O que o programa respondeu sobre o arquivo aberto.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Reply {
     pub state: String,
     pub detail: String,
     /// O programa alcança a nuvem agora? Sem conexão o app salva neste PC e o programa envia quando ela voltar.
     pub online: bool,
+    /// Enviando: quantos bytes já foram e o total (a barra do botão).
+    pub sent: Option<u64>,
+    pub total: Option<u64>,
+    /// Enviado há pouco por este PC: a versão que a nuvem aceitou e o tamanho (a confirmação).
+    pub sent_version: Option<i64>,
+    pub sent_bytes: Option<u64>,
+    /// `too_large`: o tamanho do arquivo que a nuvem recusou.
+    pub size_bytes: Option<u64>,
+}
+
+/// Bytes em MB para as mensagens ("170 MB", "4,2 MB").
+pub fn mb(bytes: u64) -> String {
+    let v = bytes as f64 / 1_048_576.0;
+    if v >= 10.0 { format!("{} MB", v.round() as i64) } else { format!("{:.1} MB", v).replace('.', ",") }
+}
+
+/// O aviso que o app mostra quando o estado do arquivo `before` vira `after` (o mesmo arquivo): a confirmação de um envio que
+/// a nuvem aceitou, ou o motivo de a nuvem recusar por tamanho. `None`: nada a dizer.
+pub fn notice(before: Option<&Reply>, after: &Reply) -> Option<String> {
+    let was = |s: &str| before.is_some_and(|b| b.state == s);
+    if let (Some(version), Some(bytes)) = (after.sent_version, after.sent_bytes) {
+        if before.is_none_or(|b| b.sent_version != Some(version)) && (was("uploading") || was("pending") || was("new")) {
+            return Some(format!("Enviado e confirmado na LegatIA: versão {version} · {}.", mb(bytes)));
+        }
+    }
+    if after.state == "too_large" && !was("too_large") {
+        let size = after.size_bytes.map_or_else(|| after.detail.clone(), mb);
+        return Some(format!("Este arquivo tem {size} e a nuvem não aceitou por tamanho. Ele continua salvo neste PC. Quando o limite subir, clique em “Grande demais · tentar” para enviar de novo."));
+    }
+    None
 }
 
 /// O botão primário (no lugar do "Compartilhar", como o "Salvar na LegatIA" do site): o que ele diz e o que um clique faz.
@@ -33,6 +63,8 @@ pub struct Primary {
     pub tip: String,
     pub busy: bool,
     pub disabled: bool,
+    /// Enviando: de 0 a 1 (a barra dentro do botão).
+    pub progress: Option<f32>,
 }
 
 struct Shared {
@@ -42,12 +74,14 @@ struct Shared {
     reply: Option<Reply>,
     /// O arquivo a que `reply` se refere (a resposta pode ser de um arquivo que já não está na frente).
     reply_for: Option<String>,
+    /// Avisos para o app mostrar (confirmação de envio, recusa por tamanho), tirados no próximo quadro.
+    notices: Vec<String>,
     /// A consulta ao programa só existe no desktop.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     started: bool,
 }
 
-static SHARED: Mutex<Shared> = Mutex::new(Shared { path: None, reply: None, reply_for: None, started: false });
+static SHARED: Mutex<Shared> = Mutex::new(Shared { path: None, reply: None, reply_for: None, notices: Vec::new(), started: false });
 
 /// O estado (`synced`, `unpaired`, `outside`…) do arquivo `path`, se a última resposta do programa é dele.
 pub fn state_for(path: &str) -> Option<String> {
@@ -61,7 +95,7 @@ fn shared() -> MutexGuard<'static, Shared> {
 
 /// O botão para este arquivo: `dirty` é "tem alteração ainda não salva no disco".
 pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
-    let p = |id: &'static str, label: &str, tip: &str, busy: bool, disabled: bool| Primary { id, label: label.to_string(), tip: tip.to_string(), busy, disabled };
+    let p = |id: &'static str, label: &str, tip: &str, busy: bool, disabled: bool| Primary { id, label: label.to_string(), tip: tip.to_string(), busy, disabled, progress: None };
     if reply.state == "unpaired" {
         return p("connect", "Conectar à LegatIA", "Abre a página Design do site: clique em “App no computador” para ligar este app à sua conta.", false, false);
     }
@@ -91,7 +125,27 @@ pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
         return p("save", "Salvar na LegatIA", "Salva e envia para a nuvem agora.", false, false);
     }
     match reply.state.as_str() {
-        "uploading" => p("", "Enviando…", "Enviando a versão salva para a nuvem.", true, false),
+        "uploading" => match (reply.sent, reply.total) {
+            (Some(sent), Some(total)) if total > 0 => {
+                let k = (sent as f64 / total as f64).clamp(0.0, 1.0);
+                Primary {
+                    id: "",
+                    label: format!("Enviando {}%", (k * 100.0).floor() as i64),
+                    tip: format!("Enviando para a nuvem: {} de {}.", mb(sent), mb(total)),
+                    busy: true,
+                    disabled: false,
+                    progress: Some(k as f32),
+                }
+            }
+            _ => p("", "Enviando…", "Enviando a versão salva para a nuvem.", true, false),
+        },
+        "too_large" => p(
+            "save",
+            "Grande demais · tentar",
+            &format!("Este arquivo tem {} e a nuvem recusou por tamanho (o limite do armazenamento). Ele continua salvo neste PC. Clique para tentar de novo (depois que o limite subir).", reply.size_bytes.map_or_else(|| reply.detail.clone(), mb)),
+            false,
+            false,
+        ),
         "pending" => p("save", "Enviar à LegatIA", "Salvo no disco e ainda não enviado. Clique para enviar agora.", false, false),
         "new" => p("save", "Novo · enviar", "Arquivo novo na pasta: clique para criar na nuvem agora.", false, false),
         "locked" => Primary {
@@ -100,10 +154,20 @@ pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
             tip: "Outra pessoa está editando. O envio acontece quando a trava soltar (até 15 min).".into(),
             busy: false,
             disabled: true,
+            progress: None,
         },
         "conflict" => p("", "Conflito", "A nuvem mudou junto: a sua cópia está na pasta _conflitos e este arquivo é o da nuvem.", false, true),
         "behind" => p("", "Nuvem mais nova", "Feche e abra o arquivo para ver a versão da nuvem.", false, true),
-        "synced" => Primary { id: "", label: "Salvo na LegatIA".into(), tip: format!("Igual à nuvem · {}.", reply.detail), busy: false, disabled: true },
+        // Acabou de enviar daqui: a confirmação fica no botão (a nuvem aceitou esta versão, com este tamanho)
+        "synced" if reply.sent_version.is_some() => Primary {
+            id: "",
+            label: format!("Enviado ✓ versão {}", reply.sent_version.unwrap_or_default()),
+            tip: format!("A nuvem confirmou: versão {} · {}.", reply.sent_version.unwrap_or_default(), reply.sent_bytes.map_or_else(String::new, mb)),
+            busy: false,
+            disabled: true,
+            progress: Some(1.0),
+        },
+        "synced" => Primary { id: "", label: "Salvo na LegatIA".into(), tip: format!("Igual à nuvem · {}.", reply.detail), busy: false, disabled: true, progress: None },
         _ => p("", "LegatIA", "Estado desconhecido.", false, true),
     }
 }
@@ -139,7 +203,7 @@ fn current_primary(app: &FigApp) -> Option<Primary> {
 /// O botão na aba ao vivo: diz que está ao vivo e como está a gravação. `saver`: quem grava, quando não sou eu.
 pub fn live_primary(reply: &Reply, dirty: bool, saver: Option<String>) -> Primary {
     let tip_auto = "Todos neste arquivo veem as mudanças na hora. A sessão grava na LegatIA sozinha, alguns segundos depois que a mexida para.";
-    let p = |id: &'static str, label: &str, tip: String, busy: bool| Primary { id, label: label.to_string(), tip, busy, disabled: id.is_empty() };
+    let p = |id: &'static str, label: &str, tip: String, busy: bool| Primary { id, label: label.to_string(), tip, busy, disabled: id.is_empty(), progress: None };
     if let Some(name) = saver {
         return p("", "Ao vivo", format!("Todos neste arquivo veem as mudanças na hora. Quem grava na LegatIA é {name} (entrou primeiro), sozinho."), false);
     }
@@ -175,6 +239,10 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     super::live_edit::frame(app, ctx);
     // Um arquivo que a pessoa pediu na Home e que o programa foi buscar na nuvem: abre quando chega
     super::home::fetch_frame(app);
+    // Avisos do envio: confirmação de que a nuvem aceitou, ou o motivo de recusar por tamanho
+    for msg in std::mem::take(&mut shared().notices) {
+        app.toast(msg);
+    }
     // Demonstrar: a câmera que acompanha o enxame e a seleção que segue o quadro da vez
     #[cfg(not(target_arch = "wasm32"))]
     super::reveal::frame(app, ctx);
@@ -190,7 +258,7 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     }
     let mut host = serde_json::json!({ "dockSlot": 36.0 });
     if let Some(p) = current_primary(app) {
-        host["primary"] = serde_json::json!({ "id": p.id, "label": p.label, "tip": p.tip, "busy": p.busy, "disabled": p.disabled });
+        host["primary"] = serde_json::json!({ "id": p.id, "label": p.label, "tip": p.tip, "busy": p.busy, "disabled": p.disabled, "progress": p.progress });
     }
     static LAST: Mutex<String> = Mutex::new(String::new());
     let text = host.to_string();
@@ -283,6 +351,13 @@ fn refresh(path: Option<&str>, ctx: &egui::Context) {
     let reply = native::poll(path);
     let changed = {
         let mut s = shared();
+        // Um envio que terminou (ou foi recusado) vira aviso; abrir um arquivo que a nuvem recusou por tamanho também avisa
+        if let Some(after) = reply.as_ref() {
+            let before = if s.reply_for.as_deref() == path { s.reply.as_ref() } else { None };
+            if let Some(msg) = notice(before, after) {
+                s.notices.push(msg);
+            }
+        }
         let changed = s.reply != reply || s.reply_for.as_deref() != path;
         s.reply = reply;
         s.reply_for = path.map(str::to_string);
@@ -410,6 +485,11 @@ mod native {
             detail: v.get("detail").and_then(|d| d.as_str()).unwrap_or("").to_string(),
             // Um programa antigo não diz: vale como com conexão
             online: v.get("online").and_then(|o| o.as_bool()).unwrap_or(true),
+            sent: v.get("sent").and_then(serde_json::Value::as_u64),
+            total: v.get("total").and_then(serde_json::Value::as_u64),
+            sent_version: v.get("sentVersion").and_then(serde_json::Value::as_i64),
+            sent_bytes: v.get("sentBytes").and_then(serde_json::Value::as_u64),
+            size_bytes: v.get("sizeBytes").and_then(serde_json::Value::as_u64),
         })
     }
 
@@ -429,8 +509,8 @@ mod native {
 
         #[test]
         fn parses_the_programs_answer() {
-            assert_eq!(parse(r#"{"email":"a@b","state":"synced","detail":"versão 4"}"#), Some(Reply { state: "synced".into(), detail: "versão 4".into(), online: true }));
-            assert_eq!(parse(r#"{"state":"pending"}"#), Some(Reply { state: "pending".into(), detail: String::new(), online: true }));
+            assert_eq!(parse(r#"{"email":"a@b","state":"synced","detail":"versão 4"}"#), Some(Reply { state: "synced".into(), detail: "versão 4".into(), online: true, ..Default::default() }));
+            assert_eq!(parse(r#"{"state":"pending"}"#), Some(Reply { state: "pending".into(), detail: String::new(), online: true, ..Default::default() }));
             assert_eq!(parse(r#"{"state":"pending","online":false}"#).map(|r| r.online), Some(false));
             assert_eq!(parse("não é json"), None);
             assert_eq!(parse(r#"{"detail":"x"}"#), None);
@@ -443,11 +523,11 @@ mod tests {
     use super::*;
 
     fn reply(state: &str, detail: &str) -> Reply {
-        Reply { state: state.into(), detail: detail.into(), online: true }
+        Reply { state: state.into(), detail: detail.into(), online: true, ..Default::default() }
     }
 
     fn offline(state: &str) -> Reply {
-        Reply { state: state.into(), detail: String::new(), online: false }
+        Reply { state: state.into(), detail: String::new(), online: false, ..Default::default() }
     }
 
     #[test]
@@ -490,6 +570,41 @@ mod tests {
         assert_eq!(primary(&offline("unpaired"), false, true).id, "connect");
         // Com conexão nada muda
         assert_eq!(primary(&reply("pending", ""), false, true).label, "Enviar à LegatIA");
+    }
+
+    #[test]
+    fn a_big_upload_shows_its_progress_in_the_button() {
+        let r = Reply { sent: Some(42 * 1_048_576), total: Some(100 * 1_048_576), ..reply("uploading", "42 MB de 100 MB") };
+        let p = primary(&r, false, true);
+        assert_eq!((p.label.as_str(), p.busy, p.progress), ("Enviando 42%", true, Some(0.42)));
+        assert!(p.tip.contains("42 MB de 100 MB"), "{}", p.tip);
+    }
+
+    #[test]
+    fn too_large_says_the_size_and_lets_you_try_again() {
+        let r = Reply { size_bytes: Some(178_511_687), ..reply("too_large", "170 MB") };
+        let p = primary(&r, false, true);
+        assert_eq!((p.id, p.label.as_str(), p.disabled), ("save", "Grande demais · tentar", false));
+        assert!(p.tip.contains("170 MB"), "{}", p.tip);
+    }
+
+    #[test]
+    fn a_finished_upload_is_confirmed_once_and_a_refusal_explains_itself() {
+        let sending = Reply { sent: Some(5), total: Some(10), ..reply("uploading", "") };
+        let done = Reply { sent_version: Some(7), sent_bytes: Some(178_511_687), ..reply("synced", "versão 7") };
+        assert_eq!(notice(Some(&sending), &done).as_deref(), Some("Enviado e confirmado na LegatIA: versão 7 · 170 MB."));
+        // E o botão confirma também (o aviso pode ser coberto por outro)
+        let p = primary(&done, false, true);
+        assert_eq!((p.label.as_str(), p.progress), ("Enviado ✓ versão 7", Some(1.0)));
+        assert!(p.tip.contains("170 MB"));
+        // Já confirmado: não repete
+        assert_eq!(notice(Some(&done), &done), None);
+        // Abriu um arquivo já igual à nuvem: nada a dizer
+        assert_eq!(notice(None, &done), None);
+        let big = Reply { size_bytes: Some(178_511_687), ..reply("too_large", "170 MB") };
+        assert!(notice(Some(&sending), &big).is_some_and(|m| m.contains("170 MB")));
+        assert_eq!(notice(Some(&big), &big), None);
+        assert_eq!(mb(4_404_019), "4,2 MB");
     }
 
     #[test]

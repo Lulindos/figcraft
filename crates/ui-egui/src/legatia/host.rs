@@ -50,6 +50,8 @@ pub struct Button {
     /// Shown as working (the label says what): not clickable.
     pub busy: bool,
     pub disabled: bool,
+    /// The primary button's progress (0 to 1): a bar fills it while an upload runs.
+    pub progress: Option<f32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -176,6 +178,13 @@ pub fn primary_button(ui: &mut Ui, t: &Tokens, top: Rect) -> Option<Rect> {
         ui.painter().add(glow.as_shape(r, pill));
     }
     ui.painter().rect(r, pill, if b.disabled { t.pressed } else { CTA_FILL }, Stroke::new(2.0, Color32::WHITE), StrokeKind::Inside);
+    // LegatIA: an upload's progress fills the pill from the left in the brand blue
+    if let Some(k) = b.progress.filter(|k| k.is_finite()) {
+        let inner = r.shrink(2.0);
+        let filled = Rect::from_min_size(inner.min, vec2(inner.width() * k.clamp(0.0, 1.0), inner.height()));
+        ui.painter().with_clip_rect(filled).rect_filled(inner, CornerRadius::same(13), Color32::from_rgb(0x00, 0x6F, 0xFE).gamma_multiply(0.35));
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+    }
     ui.painter().galley(r.center() - label.size() / 2.0, label, ink);
     if resp.clicked() {
         emit(json!({"type": "button", "id": b.id}));
