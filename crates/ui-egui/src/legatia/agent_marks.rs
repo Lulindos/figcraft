@@ -50,7 +50,7 @@ fn bytes(b: Brand) -> &'static [u8] {
 
 /// A textura da marca (decodificada uma vez e guardada no contexto).
 fn texture(ctx: &Context, b: Brand) -> Option<TextureHandle> {
-    let id = egui::Id::new(("legatia_agent_mark", b as u8));
+    let id = egui::Id::unique(("legatia_agent_mark", b as u8));
     if let Some(t) = ctx.data(|d| d.get_temp::<TextureHandle>(id)) {
         return Some(t);
     }

@@ -97,6 +97,7 @@ fn opening_an_open_file_says_it_is_stale_and_reloads_on_request() {
     cli.execute("file.open", &json!({"path": path})).unwrap();
     cli.execute("page.rename", &json!({"name": "Renamed on disk by the CLI"})).unwrap();
     cli.execute("file.save", &json!({})).unwrap();
+    assert!(app.ds().unwrap().changed_on_disk(), "LegatIA's Atualizar button asks this");
     assert_eq!(app.execute("file.open", &json!({"path": path})).unwrap(), json!({"index": index, "stale": true}));
     assert_eq!(page_in_tab(&app), before, "without reload the tab keeps what it read");
     assert_eq!(app.execute("file.open", &json!({"path": path, "reload": true})).unwrap(), json!({"index": index, "reloaded": true}));

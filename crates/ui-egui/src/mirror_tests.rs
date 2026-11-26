@@ -3,6 +3,7 @@
 //! (now dragged the other way) and the widths are the same preferences; egui's own chrome (scroll
 //! bars, submenus) mirrors with it, and an English window is as it was.
 
+use crate::layers;
 use egui::pos2;
 use figcraft_engine::Session;
 use serde_json::json;

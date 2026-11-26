@@ -156,8 +156,9 @@ pub fn primary(reply: &Reply, dirty: bool, has_path: bool) -> Primary {
             disabled: true,
             progress: None,
         },
-        "conflict" => p("", "Conflito", "A nuvem mudou junto: a sua cópia está na pasta _conflitos e este arquivo é o da nuvem.", false, true),
-        "behind" => p("", "Nuvem mais nova", "Feche e abra o arquivo para ver a versão da nuvem.", false, true),
+        "conflict" => p("", "Cópia guardada", "A nuvem mudou junto: a sua cópia está na pasta _conflitos e este arquivo é o da nuvem.", false, true),
+        "behind" => p("update", "Atualizar", "Há uma versão mais nova na LegatIA. Clique para trazer para cá.", false, false),
+        "failed" => p("save", "Não subiu", &format!("Salvo neste PC, mas o envio falhou: {}. Clique para tentar de novo.", reply.detail), false, false),
         // Acabou de enviar daqui: a confirmação fica no botão (a nuvem aceitou esta versão, com este tamanho)
         "synced" if reply.sent_version.is_some() => Primary {
             id: "",
@@ -190,12 +191,33 @@ fn active_path(app: &FigApp) -> Option<String> {
     app.session.docs.get(app.session.active).and_then(|d| d.path.clone())
 }
 
+/// O botão quando o arquivo mudou debaixo da aba (ver [`super::update`]).
+pub fn stale_primary(running: bool) -> Primary {
+    Primary {
+        id: if running { "" } else { "update" },
+        label: if running { "Atualizando…" } else { "Atualizar" }.to_string(),
+        tip: "Há uma versão mais nova deste arquivo. O que você mudou aqui fica guardado na pasta _conflitos.".to_string(),
+        busy: running,
+        disabled: running,
+        progress: None,
+    }
+}
+
+/// O arquivo `path` está na pasta da LegatIA (o programa conhece o estado dele)?
+pub fn in_folder(path: &str) -> bool {
+    state_for(path).is_some_and(|s| !matches!(s.as_str(), "outside" | "none" | "unpaired"))
+}
+
 fn current_primary(app: &FigApp) -> Option<Primary> {
     let reply = shared().reply.clone()?;
     let ds = app.session.docs.get(app.session.active)?;
     #[cfg(not(target_arch = "wasm32"))]
     if super::live_edit::live_origin(app).is_some() {
         return Some(live_primary(&reply, ds.is_dirty(), super::live_edit::other_saver()));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if ds.path.as_deref().is_some_and(in_folder) && (super::update::running() || super::update::stale(app)) {
+        return Some(stale_primary(super::update::running()));
     }
     Some(primary(&reply, ds.is_dirty(), ds.path.is_some()))
 }
@@ -204,6 +226,12 @@ fn current_primary(app: &FigApp) -> Option<Primary> {
 pub fn live_primary(reply: &Reply, dirty: bool, saver: Option<String>) -> Primary {
     let tip_auto = "Todos neste arquivo veem as mudanças na hora. A sessão grava na LegatIA sozinha, alguns segundos depois que a mexida para.";
     let p = |id: &'static str, label: &str, tip: String, busy: bool| Primary { id, label: label.to_string(), tip, busy, disabled: id.is_empty(), progress: None };
+    if reply.state == "live_diverged" {
+        return p("", "Ao vivo · parou", "Este arquivo foi salvo fora do ao vivo: a sessão não grava por cima. Saia do ao vivo; o que foi feito aqui fica guardado na pasta _conflitos.".to_string(), false);
+    }
+    if reply.state == "failed" {
+        return p("save", "Não subiu", format!("O envio falhou: {}. Clique para tentar de novo.", reply.detail), false);
+    }
     if let Some(name) = saver {
         return p("", "Ao vivo", format!("Todos neste arquivo veem as mudanças na hora. Quem grava na LegatIA é {name} (entrou primeiro), sozinho."), false);
     }
@@ -243,6 +271,8 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     for msg in std::mem::take(&mut shared().notices) {
         app.toast(msg);
     }
+    // "Atualizar": quando o programa responde, a aba relê o arquivo
+    super::update::frame(app);
     // Demonstrar: a câmera que acompanha o enxame e a seleção que segue o quadro da vez
     #[cfg(not(target_arch = "wasm32"))]
     super::reveal::frame(app, ctx);
@@ -252,6 +282,7 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
         }
         match event.get("id").and_then(|i| i.as_str()) {
             Some("save") => save_now(app, ctx),
+            Some("update") => super::update::start(app, ctx),
             Some("connect") => ctx.open_url(egui::OpenUrl::new_tab(SITE)),
             _ => {}
         }
@@ -618,6 +649,25 @@ mod tests {
         let p = primary(&reply("locked", "Maria"), false, true);
         assert_eq!((p.label.as_str(), p.disabled), ("Editando: Maria", true));
         assert!(primary(&reply("conflict", ""), false, true).disabled);
+    }
+
+    #[test]
+    fn a_newer_version_offers_to_update_and_a_failed_upload_to_try_again() {
+        assert_eq!(primary(&reply("behind", ""), false, true).id, "update");
+        let failed = primary(&reply("failed", "armazenamento cheio"), false, true);
+        assert_eq!(failed.id, "save");
+        assert!(failed.tip.contains("armazenamento cheio"), "{}", failed.tip);
+        // A aba que ficou para trás: o clique atualiza; enquanto atualiza, não há o que clicar
+        assert_eq!(stale_primary(false).id, "update");
+        assert!(stale_primary(true).disabled && stale_primary(true).id.is_empty());
+    }
+
+    #[test]
+    fn a_session_saved_over_from_outside_stops_offering_to_save() {
+        let p = live_primary(&reply("live_diverged", "Maria"), true, None);
+        assert!(p.id.is_empty() && p.disabled, "{p:?}");
+        assert!(p.tip.contains("_conflitos"), "{}", p.tip);
+        assert_eq!(live_primary(&reply("synced", ""), true, None).id, "save");
     }
 
     #[test]

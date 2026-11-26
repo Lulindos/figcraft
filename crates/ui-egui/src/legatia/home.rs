@@ -474,7 +474,7 @@ fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now
     if let Some(o) = ok {
         // A pílula de vidro de quem está conectado (como a do perfil no site)
         let pill = Rect::from_min_size(pos2(rect.max.x - pill_w, rect.min.y + 4.0), vec2(pill_w, 44.0));
-        let resp = ui.interact(pill, ui.id().with("legatia_profile_pill"), Sense::hover());
+        let resp = ui.interact(pill, ui.scope_id().with("legatia_profile_pill"), Sense::hover());
         glass(ui, t, pill, 22.0, resp.hovered());
         let badge = Rect::from_center_size(pos2(pill.min.x + 24.0, pill.center().y), vec2(30.0, 30.0));
         let p = ui.painter();
@@ -511,7 +511,7 @@ fn hero(ui: &mut Ui, t: &Tokens, overview: Option<&Overview>, checked: bool, now
 
 /// Uma ação: um cartão de vidro com o ícone num bloco azul. A primeira (`primary`) é o azul cheio da marca.
 fn action(ui: &mut Ui, t: &Tokens, rect: Rect, icon: Icon, title: &str, sub: &str, primary: bool) -> bool {
-    let resp = ui.interact(rect, ui.id().with(("legatia_action", title)), Sense::click());
+    let resp = ui.interact(rect, ui.scope_id().with(("legatia_action", title)), Sense::click());
     crate::a11y::button(&resp, title);
     let hovered = resp.hovered();
     if primary && t.dark {
@@ -743,7 +743,7 @@ fn file_grid(ui: &mut Ui, t: &Tokens, items: &[Card]) -> Option<String> {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), card_h), Sense::hover());
         for (i, card) in row.iter().enumerate() {
             let rect = Rect::from_min_size(pos2(r.min.x + i as f32 * (card_w + gap), r.min.y), vec2(card_w, card_h));
-            let resp = ui.interact(rect, egui::Id::new(("legatia_home_file", &card.file.id)), Sense::click());
+            let resp = ui.interact(rect, egui::Id::unique(("legatia_home_file", &card.file.id)), Sense::click());
             crate::a11y::button(&resp, &card.file.name);
             if ui.is_rect_visible(rect) {
                 file_card(ui, t, rect, picture_h, &resp, card);
@@ -858,7 +858,7 @@ pub fn project_matches<'a>(groups: &[&'a Group], query: &str) -> Vec<&'a Group> 
 /// A busca dos projetos que ainda não têm arquivo de design: um campo e, ao digitar, até oito resultados.
 /// Devolve o projeto em que a pessoa clicou (ou o primeiro, com Enter) para criar um arquivo nele.
 fn project_search<'a>(ui: &mut Ui, t: &Tokens, groups: &[&'a Group]) -> Option<&'a Group> {
-    let id = egui::Id::new("legatia_new_in_project");
+    let id = egui::Id::unique("legatia_new_in_project");
     let mut query: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let width = ui.available_width().min(520.0);
     let hint = format!("Buscar entre os {} projetos sem arquivo…", groups.len());
@@ -1014,7 +1014,7 @@ fn connect_card(ui: &mut Ui, t: &Tokens) {
     p.text(pos2(rect.min.x + 24.0, rect.min.y + 32.0), Align2::LEFT_CENTER, "Falta ligar o app à sua conta", semibold(14.0), t.text);
     p.text(pos2(rect.min.x + 24.0, rect.min.y + 56.0), Align2::LEFT_CENTER, "No site, em Design, clique em “App no computador”.", regular(11.5), t.text_secondary);
     let button = Rect::from_min_size(pos2(rect.max.x - 24.0 - 168.0, rect.center().y - 18.0), vec2(168.0, 36.0));
-    let resp = ui.interact(button, ui.id().with("legatia_connect"), Sense::click());
+    let resp = ui.interact(button, ui.scope_id().with("legatia_connect"), Sense::click());
     ui.painter().rect_filled(button, CornerRadius::same(18), if resp.hovered() { crate::legatia::BLUE_400 } else { crate::legatia::BLUE_500 });
     ui.painter().text(button.center(), Align2::CENTER_CENTER, "Conectar à LegatIA", semibold(12.0), Color32::WHITE);
     crate::a11y::button(&resp, "Conectar à LegatIA");

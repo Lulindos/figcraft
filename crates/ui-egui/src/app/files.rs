@@ -55,6 +55,11 @@ impl FigApp {
         if crate::legatia::live_edit::request_save(self) {
             return;
         }
+        // LegatIA: o arquivo mudou debaixo da aba: o aviso em português e o botão "Atualizar", em vez da recusa
+        #[cfg(not(target_arch = "wasm32"))]
+        if crate::legatia::update::blocks_save(self) {
+            return;
+        }
         // A branch tab saves its main file.
         let tab = figcraft_engine::branches::file_tab(&self.session);
         // A path ending in .fig is never saved over silently: a .fig destination is an export copy.
@@ -255,6 +260,8 @@ impl FigApp {
                 && d.branch_of.is_none()
                 && d.preview.is_none()
                 && d.is_dirty()
+                // LegatIA: um arquivo que mudou no disco não é salvo sozinho (nem vira um aviso de erro a cada tentativa)
+                && !d.changed_on_disk()
                 && !saving.iter().any(|(uid, _)| *uid == d.uid)
         };
         let changes = if on { self.session.docs.iter().filter(due).map(|d| d.revision).reduce(u64::wrapping_add) } else { None };

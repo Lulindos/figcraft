@@ -1075,7 +1075,7 @@ pub fn draw(app: &FigApp, painter: &Painter, ctx: &egui::Context) {
     // Os controles, discretos, no alto do canvas: pausar, velocidade e parar, com a barrinha do progresso
     let (mut stop_now, mut toggle_pause, mut next_speed) = (false, false, false);
     let top = pos2(app.canvas.rect.center().x, app.canvas.rect.min.y + 14.0);
-    let area = egui::Area::new(egui::Id::new("legatia_reveal_controls")).order(egui::Order::Foreground).pivot(egui::Align2::CENTER_TOP).fixed_pos(top).show(ctx, |ui| {
+    let area = egui::Area::new(egui::Id::unique("legatia_reveal_controls")).order(egui::Order::Foreground).pivot(egui::Align2::CENTER_TOP).fixed_pos(top).show(ctx, |ui| {
         egui::Frame::new().fill(chip_bg(1.0)).corner_radius(CornerRadius::same(18)).inner_margin(egui::Margin::symmetric(6, 5)).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;

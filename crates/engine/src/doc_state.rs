@@ -194,6 +194,14 @@ impl DocState {
         self
     }
 
+    /// The tab's file changed on disk since this tab read or wrote it, so a save would be refused. LegatIA's "Atualizar" button.
+    pub fn changed_on_disk(&self) -> bool {
+        match (&self.on_disk, &self.path) {
+            (Some(was), Some(path)) => library::stat(path).is_ok_and(|now| now != *was),
+            _ => false,
+        }
+    }
+
     /// The tab's file now holds what this tab read or wrote.
     pub(crate) fn note_on_disk(&mut self) {
         self.on_disk = self.path.as_deref().and_then(|p| library::stat(p).ok());

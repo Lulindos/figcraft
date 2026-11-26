@@ -58,6 +58,8 @@ struct State {
     auto: bool,
     /// Já avisou que o app não está ligado à conta.
     unpaired_said: bool,
+    /// Já avisou que o arquivo desta sessão foi salvo fora do ao vivo.
+    diverged_said: Option<String>,
     /// O salvamento automático da sessão.
     saver: Saver,
 }
@@ -120,6 +122,7 @@ static STATE: Mutex<State> = Mutex::new(State {
     auto_tried: Vec::new(),
     auto: false,
     unpaired_said: false,
+    diverged_said: None,
     saver: Saver::new(),
 });
 
@@ -489,6 +492,13 @@ fn keep_alive(app: &mut FigApp, ctx: &egui::Context) {
     let _ = std::thread::Builder::new().name("legatia-live-ping".into()).spawn(move || {
         if let Some((200, body)) = super::sync::post(&format!("/native/live-ping?path={}", super::sync::encode_query(&origin)), 20) {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
+                if v.get("diverged").and_then(|d| d.as_bool()) == Some(true) && state().diverged_said.as_ref() != Some(&origin) {
+                    let mut s = state();
+                    s.diverged_said = Some(origin.clone());
+                    s.outcome = Some(Outcome::Said(diverged_message(v.get("by").and_then(|b| b.as_str()))));
+                    drop(s);
+                    ctx.request_repaint();
+                }
                 if v.get("active").and_then(|a| a.as_bool()) == Some(false) {
                     let why = v.pointer("/ended/message").and_then(|m| m.as_str()).unwrap_or("A sessão ao vivo foi encerrada.").to_string();
                     state().outcome = Some(Outcome::Ended(why));
@@ -497,6 +507,12 @@ fn keep_alive(app: &mut FigApp, ctx: &egui::Context) {
             }
         }
     });
+}
+
+/// O aviso de que alguém salvou o arquivo fora da sessão (`by`: quem, quando o programa sabe).
+pub fn diverged_message(by: Option<&str>) -> String {
+    let who = by.filter(|b| !b.is_empty()).unwrap_or("Alguém");
+    format!("{who} salvou este arquivo fora do ao vivo. Esta sessão não grava por cima: saia do ao vivo e o que foi feito aqui fica guardado na pasta _conflitos.")
 }
 
 /// O item do menu das pessoas (o chevron ao lado das fotos): começar ou sair da sessão ao vivo. `true`: foi clicado.

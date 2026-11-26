@@ -31,6 +31,7 @@ pub mod reveal;
 pub mod save_dialog;
 pub mod strands;
 pub mod sync;
+pub mod update;
 
 /// The LegatIA blue (#006FFE) and the steps of its scale used by the UI (LegatIA design system).
 pub const BLUE_300: Color32 = Color32::from_rgb(0x75, 0xB1, 0xFF);
@@ -126,7 +127,7 @@ pub fn paint_logo(ui: &Ui, left_center: Pos2, height: f32, t: &Tokens) {
         paint_wordmark(ui.painter(), left_center, crate::theme::brand(height * 0.8), t);
         return;
     };
-    let id = egui::Id::new("legatia_logo_texture");
+    let id = egui::Id::unique("legatia_logo_texture");
     let texture = ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(id)).unwrap_or_else(|| {
         let texture = ui.ctx().load_texture("legatia-logo", image.clone(), egui::TextureOptions::LINEAR);
         ui.ctx().data_mut(|d| d.insert_temp(id, texture.clone()));
@@ -298,6 +299,8 @@ pub fn update_text(text: &str, args: &[(&str, &str)]) -> String {
         "Update and Restart" => "Atualizar e reiniciar",
         "Restart to Update" => "Reiniciar para atualizar",
         "Check Again" => "Verificar de novo",
+        "Save and Update" => "Salvar e atualizar",
+        "Saving your work..." => "Salvando o seu trabalho…",
         "Dismiss" => "Dispensar",
         "Download" => "Baixar",
         "Later" => "Depois",

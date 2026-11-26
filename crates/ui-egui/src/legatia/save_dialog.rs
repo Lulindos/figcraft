@@ -140,12 +140,12 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     // O fundo escurece e segura os cliques: o quadro é modal
-    egui::Area::new(Id::new("legatia_save_backdrop")).order(Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
+    egui::Area::new(Id::unique("legatia_save_backdrop")).order(Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
         let (r, _) = ui.allocate_exact_size(screen.size(), Sense::click_and_drag());
         ui.painter().rect_filled(r, CornerRadius::ZERO, Color32::from_black_alpha(150));
     });
     let mut action: Option<Action> = None;
-    egui::Area::new(Id::new("legatia_save_card")).order(Order::Foreground).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).show(ctx, |ui| {
+    egui::Area::new(Id::unique("legatia_save_card")).order(Order::Foreground).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).show(ctx, |ui| {
         let frame = egui::Frame::NONE.fill(Color32::from_rgb(15, 19, 30)).corner_radius(CornerRadius::same(22)).inner_margin(egui::Margin::same(24));
         let shown_frame = frame.show(ui, |ui| {
             ui.set_width(440.0);
@@ -161,7 +161,7 @@ pub fn show(app: &mut FigApp, ctx: &egui::Context) {
             ui.add_space(16.0);
             ui.label(egui::RichText::new("Nome do arquivo").font(semibold(11.5)).color(t.text_secondary));
             ui.add_space(6.0);
-            let name_id = Id::new("legatia_save_name");
+            let name_id = Id::unique("legatia_save_name");
             let out = ui.add(egui::TextEdit::singleline(&mut d.name).id(name_id).hint_text("Sem título").font(regular(13.0)).desired_width(f32::INFINITY));
             if d.focus {
                 out.request_focus();

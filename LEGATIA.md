@@ -165,6 +165,18 @@ da versão web (`v<X.Y.Z>-legatia.<n>`) têm sufixo e o verificador de atualiza�
 - **Ícone:** "IA" com a primeira barra em azul (`#006FFE`), para não se confundir com o app da ilha (`assets/app-icon/README.md`).
 - O workflow de Actions deste fork está parado pelo GitHub, então o build é local.
 
+## 0.19.0: FigCraft até 23/11/2026 e fim do "salvar por cima"
+
+- **Base:** upstream `main` em `c01d391df` (23/11/2026, 997 commits depois de `7bf098d7`). A troca da base da interface deles
+  ("minimal port", #2602, 25/11) ficou de fora de propósito. `vendor/craft-update` refeito no rev `a49329e` com os nossos mesmos
+  ajustes. Nossa versão (0.19.0) fica acima da última estável deles (0.18.1).
+- **Atualizar (`legatia/update.rs`):** quando o arquivo muda debaixo de uma aba (o editor já recusava salvar, em inglês), o botão
+  primário vira "Atualizar": guarda a versão da aba em `_conflitos`, pede a da nuvem ao programa (`/native/update`) e relê o arquivo.
+- **Ao vivo:** o programa só grava por cima de versões que a própria sessão gravou; se alguém salvar por fora, o botão vira
+  "Ao vivo · parou" e, ao sair, a cópia da sessão vai para `_conflitos`. O porteiro troca a cópia do servidor quando a nuvem andou e
+  não há ninguém dentro (a antiga fica guardada). Código em `tools/legatia-sync` e `tools/porteiro` no repositório do site.
+- **Envio que falha** aparece no botão ("Não subiu"), com o motivo.
+
 ## Regras para mexer aqui
 
 - Personalização nova vai em `legatia.rs` sempre que der; no código do FigCraft, só a linha que chama ela.

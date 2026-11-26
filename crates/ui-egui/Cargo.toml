@@ -41,3 +41,5 @@ egui = { workspace = true, features = ["default_fonts", "monochrome_emoji_fonts"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 craft-update = { workspace = true }
+# LegatIA: a data e a hora no nome da cópia que o "Atualizar" guarda
+chrono = { workspace = true, features = ["clock"] }

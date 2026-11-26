@@ -798,7 +798,9 @@ version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
+ "iana-time-zone",
  "num-traits",
+ "windows-link",
 ]
 
 [[package]]
@@ -1427,7 +1429,6 @@ dependencies = [
 [[package]]
 name = "craft-update"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=a49329e71e32ad93794ab595c41f33209a7d2220#a49329e71e32ad93794ab595c41f33209a7d2220"
 dependencies = [
  "chrono",
  "dunce",
@@ -2122,7 +2123,7 @@ checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 
 [[package]]
 name = "figcraft"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "arboard",
  "craft-menu",
@@ -2155,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-cli"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2173,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-collab"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2191,7 +2192,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-collab-net"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "figcraft-collab",
@@ -2214,7 +2215,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-color"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "kurbo",
  "serde",
@@ -2223,7 +2224,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-doc"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "figcraft-color",
  "figcraft-geom",
@@ -2236,7 +2237,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-engine"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "craft-docpath",
@@ -2270,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-format"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "craft-fig",
  "craft-figcraft-format",
@@ -2295,7 +2296,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-geom"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "kurbo",
  "serde",
@@ -2303,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-layout"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "figcraft-doc",
  "figcraft-geom",
@@ -2311,7 +2312,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-mcp"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "figcraft-collab-net",
@@ -2327,7 +2328,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-pathops"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "figcraft-doc",
  "figcraft-geom",
@@ -2336,7 +2337,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-pdf"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "craft-pdf",
  "figcraft-color",
@@ -2354,7 +2355,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-plugin"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "figcraft-color",
  "serde",
@@ -2367,7 +2368,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-render"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "craft-gif",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
@@ -2388,7 +2389,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-server"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "chrono",
  "crc32fast",
@@ -2413,7 +2414,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-svg"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "craft-svg",
@@ -2431,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-text"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "core-text",
  "craft-font-catalog",
@@ -2450,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-ui-egui"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2478,7 +2479,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-vectordrawable"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "craft-vectordrawable",
  "figcraft-color",
@@ -2493,7 +2494,7 @@ dependencies = [
 
 [[package]]
 name = "figcraft-web"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "base64 0.22.1",
  "craft-web-api",
@@ -3070,6 +3071,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
 dependencies = [
  "typenum",
+]
+
+[[package]]
+name = "iana-time-zone"
+version = "0.1.65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470"
+dependencies = [
+ "android_system_properties",
+ "core-foundation-sys",
+ "iana-time-zone-haiku",
+ "js-sys",
+ "log",
+ "wasm-bindgen",
+ "windows-core",
+]
+
+[[package]]
+name = "iana-time-zone-haiku"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -7274,7 +7299,7 @@ checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 
 [[package]]
 name = "xtask"
-version = "0.18.1"
+version = "0.19.0"
 dependencies = [
  "figcraft-engine",
  "serde_json",
