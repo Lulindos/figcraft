@@ -191,6 +191,25 @@ fn active_path(app: &FigApp) -> Option<String> {
     app.session.docs.get(app.session.active).and_then(|d| d.path.clone())
 }
 
+/// O rótulo curto de um rótulo comprido, para quando a barra de pessoas (com o agente da IA ou o time) precisa do espaço:
+/// a dica do botão continua explicando. Vazio: o rótulo já é curto.
+pub fn short_label(label: &str) -> &'static str {
+    match label {
+        "Salvar na LegatIA" | "Salvar neste PC" => "Salvar",
+        "Salvo na LegatIA" => "Salvo ✓",
+        "Enviar à LegatIA" | "Novo · enviar" => "Enviar",
+        "Conectar à LegatIA" => "Conectar",
+        "Grande demais · tentar" => "Grande",
+        "Aguardando rede" | "Ao vivo · sem rede" => "Sem rede",
+        "Ao vivo · salvar" | "Ao vivo · salvo" | "Ao vivo · enviando…" => "Ao vivo",
+        "Ao vivo · parou" => "Parou",
+        "Cópia guardada" => "Cópia",
+        l if l.starts_with("Enviado ✓") => "Enviado ✓",
+        l if l.starts_with("Editando:") => "Ocupado",
+        _ => "",
+    }
+}
+
 /// O botão quando o arquivo mudou debaixo da aba (ver [`super::update`]).
 pub fn stale_primary(running: bool) -> Primary {
     Primary {
@@ -289,7 +308,7 @@ pub fn host_frame(app: &mut FigApp, ctx: &egui::Context) {
     }
     let mut host = serde_json::json!({ "dockSlot": 36.0 });
     if let Some(p) = current_primary(app) {
-        host["primary"] = serde_json::json!({ "id": p.id, "label": p.label, "tip": p.tip, "busy": p.busy, "disabled": p.disabled, "progress": p.progress });
+        host["primary"] = serde_json::json!({ "id": p.id, "short": short_label(&p.label), "label": p.label, "tip": p.tip, "busy": p.busy, "disabled": p.disabled, "progress": p.progress });
     }
     static LAST: Mutex<String> = Mutex::new(String::new());
     let text = host.to_string();
@@ -668,6 +687,17 @@ mod tests {
         assert!(p.id.is_empty() && p.disabled, "{p:?}");
         assert!(p.tip.contains("_conflitos"), "{}", p.tip);
         assert_eq!(live_primary(&reply("synced", ""), true, None).id, "save");
+    }
+
+    #[test]
+    fn every_long_label_has_a_short_one_for_a_crowded_top_bar() {
+        let states = ["synced", "pending", "new", "behind", "conflict", "failed", "too_large", "locked", "unpaired", "outside", "uploading"];
+        let mut labels: Vec<String> = states.iter().flat_map(|s| [primary(&reply(s, "Maria"), false, true).label, primary(&reply(s, ""), true, true).label]).collect();
+        labels.extend(["synced", "pending", "live_diverged"].iter().flat_map(|s| [live_primary(&reply(s, ""), false, None).label, live_primary(&reply(s, ""), true, None).label]));
+        for label in labels {
+            let short = short_label(&label);
+            assert!(label.chars().count() <= 11 || (!short.is_empty() && short.chars().count() <= 11), "{label:?} -> {short:?}");
+        }
     }
 
     #[test]

@@ -171,7 +171,7 @@ pub fn paint_person(painter: &egui::Painter, center: Pos2, radius: f32, name: &s
     #[cfg(not(target_arch = "wasm32"))]
     if !cfg!(test) {
         if let Some(texture) = images::avatar_by_name(painter.ctx(), name) {
-            paint_round(painter, &texture, center, radius);
+            paint_round(painter, &texture, center, radius, egui::Color32::WHITE);
             return true;
         }
     }
@@ -190,18 +190,19 @@ pub fn person_has_photo(ctx: &egui::Context, name: &str) -> bool {
 }
 
 /// A texture cropped to a circle (the centre square of it), as a fan of triangles: a painter has no rounded images.
-#[cfg(not(target_arch = "wasm32"))]
-fn paint_round(painter: &egui::Painter, texture: &egui::TextureHandle, center: Pos2, radius: f32) {
-    let uv = images::cover_uv(texture.size_vec2(), 1.0);
+fn paint_round(painter: &egui::Painter, texture: &egui::TextureHandle, center: Pos2, radius: f32, tint: egui::Color32) {
+    let size = texture.size_vec2().max(egui::vec2(1.0, 1.0));
+    let side = size.x.min(size.y);
+    let uv = egui::Rect::from_center_size(egui::pos2(0.5, 0.5), egui::vec2(side / size.x, side / size.y));
     let mut mesh = egui::Mesh::with_texture(texture.id());
     let n = 40u32;
-    mesh.vertices.push(egui::epaint::Vertex { pos: center, uv: uv.center(), color: egui::Color32::WHITE });
+    mesh.vertices.push(egui::epaint::Vertex { pos: center, uv: uv.center(), color: tint });
     for i in 0..=n {
         let a = i as f32 / n as f32 * std::f32::consts::TAU;
         let (s, c) = a.sin_cos();
         let pos = center + egui::vec2(c, s) * radius;
         let tex = egui::pos2(uv.center().x + c * uv.width() / 2.0, uv.center().y + s * uv.height() / 2.0);
-        mesh.vertices.push(egui::epaint::Vertex { pos, uv: tex, color: egui::Color32::WHITE });
+        mesh.vertices.push(egui::epaint::Vertex { pos, uv: tex, color: tint });
         if i > 0 {
             mesh.add_triangle(0, i, i + 1);
         }

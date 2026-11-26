@@ -131,7 +131,9 @@ pub fn right_panel(app: &mut FigApp, ui: &mut Ui) {
     // Top bar: people (you and the others in a live session), present, share.
     let (top, _) = ui.allocate_exact_size(vec2(w, 48.0), Sense::hover());
     // LegatIA: the host page's button (Salvar na LegatIA) takes Share's place.
-    let share = crate::legatia::host::primary_button(ui, &t, top).unwrap_or_else(|| {
+    // Room left of it for the present button (50) and the people row with its margins (12 and 6)
+    let room = top.width() - 14.0 - 50.0 - 18.0 - crate::live::people_width(app, ui.ctx());
+    let share = crate::legatia::host::primary_button(ui, &t, top, room).unwrap_or_else(|| {
         // As wide as its label needs (longer in some languages).
         let label = ui.painter().layout_no_wrap(tr("Share").to_string(), semibold(11.5), t.accent_on);
         let sw = (label.size().x + 24.0).max(56.0);

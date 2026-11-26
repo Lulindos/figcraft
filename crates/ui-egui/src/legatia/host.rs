@@ -44,6 +44,8 @@ pub struct Host {
 pub struct Button {
     pub id: String,
     pub label: String,
+    /// The primary button's label when the full one would run into the present button (empty: none).
+    pub short: String,
     pub tip: String,
     /// `fullscreen` or `exitFullscreen` for the tab bar's buttons.
     pub icon: String,
@@ -159,13 +161,17 @@ pub fn new_file() -> bool {
 const CTA_FILL: Color32 = Color32::from_rgb(0xD1, 0xD1, 0xD1);
 const CTA_GLOW: Color32 = Color32::from_rgb(0xFF, 0x70, 0x37);
 
-/// The page's primary button in Share's place, at the right of the right panel's top bar `top`;
-/// its rect, or `None` without one (Share is drawn).
-pub fn primary_button(ui: &mut Ui, t: &Tokens, top: Rect) -> Option<Rect> {
+/// The page's primary button in Share's place, at the right of the right panel's top bar `top`, no
+/// wider than `max_w` when it has a short label; its rect, or `None` without one (Share is drawn).
+pub fn primary_button(ui: &mut Ui, t: &Tokens, top: Rect, max_w: f32) -> Option<Rect> {
     let b = get()?.primary.clone()?;
     // The ink is chosen before the label is laid out: a galley keeps the colour it was laid out with.
     let ink = if b.disabled { t.text_secondary } else if b.busy { Color32::from_gray(70) } else { Color32::BLACK };
-    let label = ui.painter().layout_no_wrap(b.label.clone(), semibold(11.5), ink);
+    let mut label = ui.painter().layout_no_wrap(b.label.clone(), semibold(11.5), ink);
+    // LegatIA: the people row and the present button come first: a long label gives way to the short one
+    if label.size().x + 28.0 > max_w && !b.short.is_empty() {
+        label = ui.painter().layout_no_wrap(b.short.clone(), semibold(11.5), ink);
+    }
     let w = (label.size().x + 28.0).max(64.0);
     let r = Rect::from_min_size(pos2(top.max.x - 14.0 - w, top.center().y - 15.0), vec2(w, 30.0));
     let idle = b.busy || b.disabled;

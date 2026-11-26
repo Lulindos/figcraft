@@ -8,7 +8,7 @@
 //! da OpenAI (Codex e GPT) e do Gemini são do conjunto aberto simple-icons (CC0, as marcas seguem sendo de quem as criou); o do
 //! Antigravity não está nesse conjunto e é um "A" desenhado por nós, até haver o arquivo oficial.
 
-use egui::{Color32, Context, Painter, Pos2, Rect, TextureHandle, TextureOptions, pos2, vec2};
+use egui::{Color32, Context, Painter, Pos2, TextureHandle, TextureOptions};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Brand {
@@ -66,8 +66,8 @@ fn texture(ctx: &Context, b: Brand) -> Option<TextureHandle> {
 pub fn paint(painter: &Painter, ctx: &Context, center: Pos2, r: f32, name: &str, alpha: f32) -> bool {
     let Some(brand) = brand_of(name) else { return false };
     let Some(tex) = texture(ctx, brand) else { return false };
-    let rect = Rect::from_center_size(center, vec2(2.0 * r, 2.0 * r));
-    painter.image(tex.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE.gamma_multiply(alpha));
+    // Recortada em círculo: as imagens têm os cantos claros, que apareciam como um quadrado atrás do anel
+    super::paint_round(painter, &tex, center, r, Color32::WHITE.gamma_multiply(alpha));
     true
 }
 

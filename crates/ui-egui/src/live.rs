@@ -546,6 +546,7 @@ fn follow_frame(painter: &egui::Painter, canvas: Rect, name: &str, fill: Color32
 /// them (again to stop); right-click them to remove them from the session (when you host it or
 /// own the file); the chevron lists everyone.
 pub fn people_bar(app: &mut FigApp, ui: &mut Ui, area: Rect) {
+    // Kept in step with [`people_width`].
     let t = Tokens::get(ui.ctx());
     const R: f32 = 12.0;
     const STEP: f32 = 20.0;
@@ -641,6 +642,13 @@ pub fn people_bar(app: &mut FigApp, ui: &mut Ui, area: Rect) {
     if let Some(id) = remove {
         app.run_background(&ui.ctx().clone(), "collab.removePerson", json!({"client": id}), Box::new(|_, _, _| {}));
     }
+}
+
+/// The narrowest the people row draws without running past its area: your avatar, up to two others
+/// (the rest fold into "+N"), an agent at work and the chevron.
+pub fn people_width(app: &FigApp, ctx: &egui::Context) -> f32 {
+    let others = app.session.live().peers.len().min(2) + usize::from(agent::shown(app, ctx).is_some());
+    44.0 + 20.0 * others as f32
 }
 
 /// The people row's chevron menu: you and everyone else; the person clicked (to follow).
