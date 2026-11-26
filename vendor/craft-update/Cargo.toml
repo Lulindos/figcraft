@@ -1,6 +1,6 @@
 [package]
 name = "craft-update"
-description = "craft-update from storytold/craft-libs (rev 1b34eba), vendored for LegatIA Design: see LEGATIA.md"
+description = "craft-update from storytold/craft-libs (rev a49329e), vendored for LegatIA Design: see LEGATIA.md"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -13,6 +13,8 @@ repository = "https://github.com/storytold/craft-libs"
 default = []
 egui = ["dep:egui", "dep:image"]
 local-mirror = []
+# Opt-in migration of first party Flatpak bundles to the ArtCraft OCI remote.
+oci_migration = []
 
 [dependencies]
 egui = { version = "0.37", default-features = false, optional = true }
@@ -31,6 +33,9 @@ semver = { version = "1", features = ["serde"] }
 [target.'cfg(unix)'.dependencies]
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"
